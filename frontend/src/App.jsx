@@ -4,12 +4,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/layout/Layout';
-// Добавьте к другим импортам:
-import ProfilePage from './pages/ProfilePage';
+import AdminLayout from './components/layout/AdminLayout';
+
 // Pages
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+
+// Admin Pages
+import {
+  AdminDashboard,
+  AdminUsers,
+  AdminComplaints,
+  AdminReports,
+  AdminSettings
+} from './pages/admin';
 
 // Create a query client
 const queryClient = new QueryClient({
@@ -34,6 +44,29 @@ const ProtectedRoute = ({ children }) => {
   }
 
   return isAuthenticated ? children : <Navigate to="/login" replace />;
+};
+
+// Admin Route component
+const AdminRoute = ({ children }) => {
+  const { isAuthenticated, user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.userType !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <AdminLayout>{children}</AdminLayout>;
 };
 
 // Public Route component (redirect if authenticated)
@@ -104,6 +137,37 @@ function AppContent() {
             </ProtectedRoute>
           } 
         />
+
+        {/* Admin routes */}
+        <Route path="/admin" element={
+          <AdminRoute>
+            <AdminDashboard />
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/users" element={
+          <AdminRoute>
+            <AdminUsers />
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/complaints" element={
+          <AdminRoute>
+            <AdminComplaints />
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/reports" element={
+          <AdminRoute>
+            <AdminReports />
+          </AdminRoute>
+        } />
+
+        <Route path="/admin/settings" element={
+          <AdminRoute>
+            <AdminSettings />
+          </AdminRoute>
+        } />
 
         {/* Public pages */}
         <Route 

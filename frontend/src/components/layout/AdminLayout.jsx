@@ -30,7 +30,7 @@ const AdminLayout = ({ children }) => {
   };
 
   // Проверяем права доступа к админке
-  if (!user || user.userType !== 'both') {
+  if (!user || user.userType !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -54,6 +54,18 @@ const AdminLayout = ({ children }) => {
       icon: HomeIcon,
       current: location.pathname === '/admin'
     },
+    {
+        name: 'Заказы',
+        href: '/admin/orders',
+        icon: ClipboardDocumentListIcon,
+        current: location.pathname.startsWith('/admin/orders')
+      },
+      {
+        name: 'Аналитика',
+        href: '/admin/analytics',
+        icon: ChartBarIcon,
+        current: location.pathname.startsWith('/admin/analytics')
+      },
     {
       name: 'Пользователи',
       href: '/admin/users',
