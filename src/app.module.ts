@@ -7,7 +7,8 @@ import { getDatabaseConfig } from './config/database.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ExecutorsModule } from './modules/executors/executors.module';
-import { CategoriesModule } from './modules/categories/categories.module'; // Добавляем
+import { CategoriesModule } from './modules/categories/categories.module';
+import { OrdersModule } from './modules/orders/orders.module'; // Добавляем
 
 @Module({
   imports: [
@@ -34,7 +35,8 @@ import { CategoriesModule } from './modules/categories/categories.module'; // Д
     AuthModule,
     UsersModule,
     ExecutorsModule,
-    CategoriesModule, // Добавляем новый модуль
+    CategoriesModule,
+    OrdersModule, // Добавляем новый модуль
   ],
   controllers: [],
   providers: [],
