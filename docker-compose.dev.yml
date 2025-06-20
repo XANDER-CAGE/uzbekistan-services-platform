@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: uzbekistan_services_postgres
+    restart: always
+    platform: linux/amd64  # Добавляем поддержку платформы
+    environment:
+      POSTGRES_DB: uzbekistan_services
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mypassword123
+      POSTGRES_TIMEZONE: Asia/Tashkent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - uzbekistan_services_network
+
+  # Redis для кеширования и очередей
+  redis:
+    image: redis:7-alpine
+    container_name: uzbekistan_services_redis
+    restart: always
+    platform: linux/amd64  # Добавляем поддержку платформы
+    command: redis-server --appendonly yes --requirepass myredispassword
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - uzbekistan_services_network
+
+  # Redis Commander для управления Redis (ARM64 совместимый)
+  redis-commander:
+    image: ghcr.io/joeferner/redis-commander:latest
+    container_name: uzbekistan_services_redis_commander
+    restart: always
+    environment:
+      REDIS_HOSTS: redis:redis:6379:0:myredispassword
+      HTTP_USER: admin
+      HTTP_PASSWORD: admin123
+    ports:
+      - "8081:8081"
+    networks:
+      - uzbekistan_services_network
+    depends_on:
+      - redis
+
+# Постоянные тома для данных
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# Сеть для связи контейнеров
+networks:
+  uzbekistan_services_network:
+    driver: bridge
