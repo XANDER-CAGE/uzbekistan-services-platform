@@ -13,7 +13,7 @@ import {
     ParseIntPipe,
     HttpCode,
     HttpStatus,
-    BadRequestException, // Добавляем импорт
+    BadRequestException,
   } from '@nestjs/common';
   import { FileInterceptor } from '@nestjs/platform-express';
   import {

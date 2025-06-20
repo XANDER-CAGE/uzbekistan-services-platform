@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/entities/user.entity';
+import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -13,6 +14,7 @@ export class AuthService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly jwtService: JwtService,
+    private readonly usersService: UsersService, // Добавляем UsersService
   ) {}
 
   /**
@@ -55,6 +57,7 @@ export class AuthService {
       language: registerDto.language,
       passwordHash,
       isVerified: true, // Сразу верифицируем без SMS
+      lastLoginAt: new Date(), // Устанавливаем время первого входа
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -74,7 +77,7 @@ export class AuthService {
   /**
    * Вход в систему
    */
-  async login(loginDto: LoginDto): Promise<{ 
+  async login(loginDto: LoginDto, ip?: string): Promise<{ 
     user: User; 
     access_token: string 
   }> {
@@ -101,9 +104,13 @@ export class AuthService {
       throw new UnauthorizedException('Неверные данные для входа');
     }
 
+    // Обновляем время последнего входа
+    await this.usersService.updateLastLogin(user.id, ip);
+
     // Загружаем полную информацию о пользователе
     const fullUser = await this.userRepository.findOne({
-      where: { id: user.id }
+      where: { id: user.id },
+      relations: ['executorProfile']
     });
 
     if (!fullUser) {
@@ -127,7 +134,8 @@ export class AuthService {
    */
   async getCurrentUser(userId: number): Promise<User> {
     const user = await this.userRepository.findOne({
-      where: { id: userId }
+      where: { id: userId },
+      relations: ['executorProfile']
     });
 
     if (!user) {
@@ -177,7 +185,8 @@ export class AuthService {
       sub: user.id, 
       phone: user.phone,
       email: user.email,
-      userType: user.userType 
+      userType: user.userType,
+      role: user.role // Добавляем роль в токен
     };
     
     return this.jwtService.sign(payload);

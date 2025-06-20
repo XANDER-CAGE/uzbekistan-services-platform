@@ -3,12 +3,13 @@ import {
     NotFoundException, 
     BadRequestException,
     UnauthorizedException,
-    ConflictException 
+    ConflictException,
+    ForbiddenException
   } from '@nestjs/common';
   import { InjectRepository } from '@nestjs/typeorm';
   import { Repository, Like, FindManyOptions } from 'typeorm';
   import * as bcrypt from 'bcrypt';
-  import { User, UserType } from './entities/user.entity'; // Импортируем UserType
+  import { User, UserType, UserRole } from './entities/user.entity';
   import { UpdateUserDto } from './dto/update-user.dto';
   import { ChangePasswordDto } from './dto/change-password.dto';
   import { UsersFilterDto } from './dto/users-filter.dto';
@@ -19,6 +20,28 @@ import {
     page: number;
     limit: number;
     totalPages: number;
+  }
+  
+  export interface UserStats {
+    total: number;
+    customers: number;
+    executors: number;
+    admins: number;
+    verified: number;
+    blocked: number;
+    byRole: {
+      user: number;
+      moderator: number;
+      admin: number;
+      super_admin: number;
+    };
+    byType: {
+      customer: number;
+      executor: number;
+      both: number;
+      admin: number;
+    };
+    recentRegistrations: number; // За последние 30 дней
   }
   
   @Injectable()
@@ -63,7 +86,7 @@ import {
         const queryBuilder = this.userRepository.createQueryBuilder('user');
         
         queryBuilder.where(
-          '(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search)',
+          '(user.firstName ILIKE :search OR user.lastName ILIKE :search OR user.phone ILIKE :search OR user.email ILIKE :search)',
           { search: `%${search}%` }
         );
   
@@ -107,7 +130,8 @@ import {
      */
     async findOne(id: number): Promise<User> {
       const user = await this.userRepository.findOne({
-        where: { id }
+        where: { id },
+        relations: ['executorProfile']
       });
   
       if (!user) {
@@ -224,6 +248,11 @@ import {
         throw new NotFoundException('Пользователь не найден');
       }
   
+      // Нельзя блокировать супер администраторов
+      if (user.role === UserRole.SUPER_ADMIN) {
+        throw new ForbiddenException('Нельзя заблокировать супер администратора');
+      }
+  
       // Блокируем пользователя вместо удаления
       await this.userRepository.update(id, {
         isBlocked: true
@@ -254,28 +283,143 @@ import {
     }
   
     /**
-     * Получить статистику пользователей
+     * Изменить роль пользователя
      */
-    async getStats(): Promise<{
-      total: number;
-      customers: number;
-      executors: number;
-      verified: number;
-      blocked: number;
-    }> {
+    async changeRole(userId: number, newRole: UserRole): Promise<User> {
+      const user = await this.userRepository.findOne({
+        where: { id: userId }
+      });
+  
+      if (!user) {
+        throw new NotFoundException('Пользователь не найден');
+      }
+  
+      // Проверяем, что не пытаемся понизить последнего супер админа
+      if (user.role === UserRole.SUPER_ADMIN && newRole !== UserRole.SUPER_ADMIN) {
+        const superAdminCount = await this.userRepository.count({
+          where: { role: UserRole.SUPER_ADMIN }
+        });
+  
+        if (superAdminCount <= 1) {
+          throw new BadRequestException('Нельзя понизить последнего супер администратора');
+        }
+      }
+  
+      user.role = newRole;
+      
+      // Если назначаем админскую роль, меняем тип пользователя на ADMIN
+      if (newRole === UserRole.ADMIN || newRole === UserRole.SUPER_ADMIN) {
+        user.userType = UserType.ADMIN;
+      }
+  
+      const updatedUser = await this.userRepository.save(user);
+      
+      // Убираем пароль из результата
+      delete updatedUser.passwordHash;
+  
+      return updatedUser;
+    }
+  
+    /**
+     * Обновить время последнего входа
+     */
+    async updateLastLogin(userId: number, ip?: string): Promise<void> {
+      await this.userRepository.update(userId, {
+        lastLoginAt: new Date(),
+        lastLoginIp: ip,
+      });
+    }
+  
+    /**
+     * Получить расширенную статистику пользователей
+     */
+    async getStats(): Promise<UserStats> {
       const total = await this.userRepository.count();
-      // Исправляем: используем enum значения вместо строк
+      
+      // Статистика по типам пользователей
       const customers = await this.userRepository.count({ where: { userType: UserType.CUSTOMER } });
       const executors = await this.userRepository.count({ where: { userType: UserType.EXECUTOR } });
+      const both = await this.userRepository.count({ where: { userType: UserType.BOTH } });
+      const admins = await this.userRepository.count({ where: { userType: UserType.ADMIN } });
+      
+      // Статистика по ролям
+      const users = await this.userRepository.count({ where: { role: UserRole.USER } });
+      const moderators = await this.userRepository.count({ where: { role: UserRole.MODERATOR } });
+      const adminRole = await this.userRepository.count({ where: { role: UserRole.ADMIN } });
+      const superAdmins = await this.userRepository.count({ where: { role: UserRole.SUPER_ADMIN } });
+      
+      // Другая статистика
       const verified = await this.userRepository.count({ where: { isVerified: true } });
       const blocked = await this.userRepository.count({ where: { isBlocked: true } });
+      
+      // Регистрации за последние 30 дней
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const recentRegistrations = await this.userRepository.count({
+        where: {
+          createdAt: { $gte: thirtyDaysAgo } as any
+        }
+      });
   
       return {
         total,
         customers,
         executors,
+        admins,
         verified,
         blocked,
+        byRole: {
+          user: users,
+          moderator: moderators,
+          admin: adminRole,
+          super_admin: superAdmins,
+        },
+        byType: {
+          customer: customers,
+          executor: executors,
+          both,
+          admin: admins,
+        },
+        recentRegistrations,
       };
+    }
+  
+    /**
+     * Поиск пользователей для админки
+     */
+    async searchUsers(query: string, limit: number = 10): Promise<User[]> {
+      const users = await this.userRepository
+        .createQueryBuilder('user')
+        .where(
+          '(user.firstName ILIKE :query OR user.lastName ILIKE :query OR user.email ILIKE :query OR user.phone ILIKE :query)',
+          { query: `%${query}%` }
+        )
+        .take(limit)
+        .getMany();
+  
+      // Убираем пароли
+      users.forEach(user => delete user.passwordHash);
+  
+      return users;
+    }
+  
+    /**
+     * Получить администраторов
+     */
+    async getAdmins(): Promise<User[]> {
+      const admins = await this.userRepository.find({
+        where: [
+          { role: UserRole.ADMIN },
+          { role: UserRole.SUPER_ADMIN },
+          { role: UserRole.MODERATOR }
+        ],
+        order: { role: 'DESC', createdAt: 'ASC' }
+      });
+  
+      // Убираем пароли
+      admins.forEach(user => delete user.passwordHash);
+  
+      return admins;
     }
   }

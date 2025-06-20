@@ -8,7 +8,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ExecutorsModule } from './modules/executors/executors.module';
 import { CategoriesModule } from './modules/categories/categories.module';
-import { OrdersModule } from './modules/orders/orders.module'; // Добавляем
+import { OrdersModule } from './modules/orders/orders.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -36,7 +37,8 @@ import { OrdersModule } from './modules/orders/orders.module'; // Добавля
     UsersModule,
     ExecutorsModule,
     CategoriesModule,
-    OrdersModule, // Добавляем новый модуль
+    OrdersModule,
+    AdminModule,
   ],
   controllers: [],
   providers: [],

@@ -12,6 +12,7 @@ import {
   import { User } from '../../users/entities/user.entity';
   import { ExecutorProfile } from '../../executors/entities/executor-profile.entity';
   import { ServiceCategory } from '../../categories/entities/service-category.entity';
+  import { OrderApplication } from './order-application.entity'; // Добавляем импорт
   
   export enum OrderStatus {
     DRAFT = 'draft',                    // Черновик (создается, но не опубликован)

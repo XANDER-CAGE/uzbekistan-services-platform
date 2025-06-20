@@ -11,7 +11,7 @@ async function bootstrap() {
 
   // Включаем CORS для фронтенда
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'], // URL вашего фронтенда
+    origin: ['http://localhost:3000', 'http://localhost:5173'], // URL вашего фронтенда
     credentials: true,
   });
 

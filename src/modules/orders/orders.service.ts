@@ -53,57 +53,129 @@ import {
      * Создать новый заказ
      */
     async createOrder(customerId: number, createDto: CreateOrderDto): Promise<Order> {
-      // Проверяем что заказчик существует
-      const customer = await this.userRepository.findOne({ where: { id: customerId } });
-      if (!customer) {
-        throw new NotFoundException('Заказчик не найден');
+        // Проверяем что заказчик существует
+        const customer = await this.userRepository.findOne({ where: { id: customerId } });
+        if (!customer) {
+          throw new NotFoundException('Заказчик не найден');
+        }
+    
+        // Проверяем что категория существует
+        const category = await this.categoryRepository.findOne({ 
+          where: { id: createDto.categoryId, isActive: true } 
+        });
+        if (!category) {
+          throw new NotFoundException('Категория не найдена или неактивна');
+        }
+    
+        // Валидируем бюджет
+        if (createDto.budgetFrom && createDto.budgetTo && createDto.budgetFrom > createDto.budgetTo) {
+          throw new BadRequestException('Минимальный бюджет не может быть больше максимального');
+        }
+    
+        // Валидируем даты
+        const now = new Date();
+        if (createDto.preferredStartDate && new Date(createDto.preferredStartDate) < now) {
+          throw new BadRequestException('Дата начала работ не может быть в прошлом');
+        }
+    
+        if (createDto.deadline && new Date(createDto.deadline) < now) {
+          throw new BadRequestException('Крайний срок не может быть в прошлом');
+        }
+    
+        // Создаем заказ
+        const order = this.orderRepository.create({
+          customerId,
+          ...createDto,
+          preferredStartDate: createDto.preferredStartDate ? new Date(createDto.preferredStartDate) : undefined,
+          deadline: createDto.deadline ? new Date(createDto.deadline) : undefined,
+          status: createDto.publish ? OrderStatus.OPEN : OrderStatus.DRAFT,
+          isPublished: createDto.publish || false,
+        });
+    
+        const savedOrder = await this.orderRepository.save(order);
+    
+        // Если заказ опубликован, увеличиваем счетчик услуг в категории
+        if (createDto.publish) {
+          await this.categoryRepository.increment({ id: createDto.categoryId }, 'servicesCount', 1);
+        }
+    
+        // ИСПРАВЛЕНИЕ: Добавляем проверку на null
+        const foundOrder = await this.orderRepository.findOne({
+          where: { id: savedOrder.id },
+          relations: ['customer', 'category'],
+        });
+    
+        if (!foundOrder) {
+          throw new NotFoundException('Ошибка при создании заказа');
+        }
+    
+        return foundOrder;
       }
-  
-      // Проверяем что категория существует
-      const category = await this.categoryRepository.findOne({ 
-        where: { id: createDto.categoryId, isActive: true } 
-      });
-      if (!category) {
-        throw new NotFoundException('Категория не найдена или неактивна');
+    
+      /**
+       * Подать заявку на заказ - ИСПРАВЛЕННАЯ ВЕРСИЯ
+       */
+      async createApplication(
+        executorUserId: number, 
+        orderId: number, 
+        createDto: CreateApplicationDto
+      ): Promise<OrderApplication> {
+        // Проверяем что заказ существует и доступен для заявок
+        const order = await this.orderRepository.findOne({ where: { id: orderId } });
+        if (!order) {
+          throw new NotFoundException('Заказ не найден');
+        }
+    
+        if (!order.canReceiveApplications) {
+          throw new BadRequestException('Заказ не принимает заявки');
+        }
+    
+        // Проверяем что исполнитель существует
+        const executor = await this.executorRepository.findOne({ 
+          where: { userId: executorUserId } 
+        });
+        if (!executor) {
+          throw new NotFoundException('Профиль исполнителя не найден');
+        }
+    
+        // Проверяем что исполнитель не владелец заказа
+        if (order.customerId === executorUserId) {
+          throw new BadRequestException('Нельзя подавать заявку на собственный заказ');
+        }
+    
+        // Проверяем что заявка еще не подана
+        const existingApplication = await this.applicationRepository.findOne({
+          where: { orderId, executorId: executor.id }
+        });
+        if (existingApplication) {
+          throw new ConflictException('Заявка уже подана на этот заказ');
+        }
+    
+        // Создаем заявку
+        const application = this.applicationRepository.create({
+          orderId,
+          executorId: executor.id,
+          ...createDto,
+          availableFrom: createDto.availableFrom ? new Date(createDto.availableFrom) : undefined,
+        });
+    
+        const savedApplication = await this.applicationRepository.save(application);
+    
+        // Увеличиваем счетчик заявок
+        await this.orderRepository.increment({ id: orderId }, 'applicationsCount', 1);
+    
+        // ИСПРАВЛЕНИЕ: Добавляем проверку на null
+        const foundApplication = await this.applicationRepository.findOne({
+          where: { id: savedApplication.id },
+          relations: ['executor', 'executor.user', 'order'],
+        });
+    
+        if (!foundApplication) {
+          throw new NotFoundException('Ошибка при создании заявки');
+        }
+    
+        return foundApplication;
       }
-  
-      // Валидируем бюджет
-      if (createDto.budgetFrom && createDto.budgetTo && createDto.budgetFrom > createDto.budgetTo) {
-        throw new BadRequestException('Минимальный бюджет не может быть больше максимального');
-      }
-  
-      // Валидируем даты
-      const now = new Date();
-      if (createDto.preferredStartDate && new Date(createDto.preferredStartDate) < now) {
-        throw new BadRequestException('Дата начала работ не может быть в прошлом');
-      }
-  
-      if (createDto.deadline && new Date(createDto.deadline) < now) {
-        throw new BadRequestException('Крайний срок не может быть в прошлом');
-      }
-  
-      // Создаем заказ
-      const order = this.orderRepository.create({
-        customerId,
-        ...createDto,
-        preferredStartDate: createDto.preferredStartDate ? new Date(createDto.preferredStartDate) : undefined,
-        deadline: createDto.deadline ? new Date(createDto.deadline) : undefined,
-        status: createDto.publish ? OrderStatus.OPEN : OrderStatus.DRAFT,
-        isPublished: createDto.publish || false,
-      });
-  
-      const savedOrder = await this.orderRepository.save(order);
-  
-      // Если заказ опубликован, увеличиваем счетчик услуг в категории
-      if (createDto.publish) {
-        await this.categoryRepository.increment({ id: createDto.categoryId }, 'servicesCount', 1);
-      }
-  
-      return this.orderRepository.findOne({
-        where: { id: savedOrder.id },
-        relations: ['customer', 'category'],
-      });
-    }
   
     /**
      * Найти заказы с фильтрацией
@@ -231,65 +303,7 @@ import {
     }
   
     /**
-     * Подать заявку на заказ
-     */
-    async createApplication(
-      executorUserId: number, 
-      orderId: number, 
-      createDto: CreateApplicationDto
-    ): Promise<OrderApplication> {
-      // Проверяем что заказ существует и доступен для заявок
-      const order = await this.orderRepository.findOne({ where: { id: orderId } });
-      if (!order) {
-        throw new NotFoundException('Заказ не найден');
-      }
-  
-      if (!order.canReceiveApplications) {
-        throw new BadRequestException('Заказ не принимает заявки');
-      }
-  
-      // Проверяем что исполнитель существует
-      const executor = await this.executorRepository.findOne({ 
-        where: { userId: executorUserId } 
-      });
-      if (!executor) {
-        throw new NotFoundException('Профиль исполнителя не найден');
-      }
-  
-      // Проверяем что исполнитель не владелец заказа
-      if (order.customerId === executorUserId) {
-        throw new BadRequestException('Нельзя подавать заявку на собственный заказ');
-      }
-  
-      // Проверяем что заявка еще не подана
-      const existingApplication = await this.applicationRepository.findOne({
-        where: { orderId, executorId: executor.id }
-      });
-      if (existingApplication) {
-        throw new ConflictException('Заявка уже подана на этот заказ');
-      }
-  
-      // Создаем заявку
-      const application = this.applicationRepository.create({
-        orderId,
-        executorId: executor.id,
-        ...createDto,
-        availableFrom: createDto.availableFrom ? new Date(createDto.availableFrom) : undefined,
-      });
-  
-      const savedApplication = await this.applicationRepository.save(application);
-  
-      // Увеличиваем счетчик заявок
-      await this.orderRepository.increment({ id: orderId }, 'applicationsCount', 1);
-  
-      return this.applicationRepository.findOne({
-        where: { id: savedApplication.id },
-        relations: ['executor', 'executor.user', 'order'],
-      });
-    }
-  
-    /**
-     * Принять заявку исполнителя
+     * Принять заявку исполнителя - ИСПРАВЛЕННАЯ ВЕРСИЯ
      */
     async acceptApplication(customerId: number, applicationId: number): Promise<Order> {
       const application = await this.applicationRepository.findOne({
@@ -323,11 +337,15 @@ import {
         });
   
         // Отклоняем все остальные заявки
-        await manager.update(
-          OrderApplication, 
-          { orderId: application.orderId, id: { $ne: applicationId } as any },
-          { status: ApplicationStatus.REJECTED, rejectionReason: 'Выбран другой исполнитель' }
-        );
+        await manager.createQueryBuilder()
+          .update(OrderApplication)
+          .set({ 
+            status: ApplicationStatus.REJECTED, 
+            rejectionReason: 'Выбран другой исполнитель' 
+          })
+          .where('orderId = :orderId', { orderId: application.orderId })
+          .andWhere('id != :applicationId', { applicationId })
+          .execute();
   
         // Обновляем заказ
         await manager.update(Order, { id: application.orderId }, {
