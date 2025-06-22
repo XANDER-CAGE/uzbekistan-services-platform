@@ -1,84 +1,53 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MagnifyingGlassIcon,
-  WrenchScrewdriverIcon,
-  SparklesIcon,
-  TruckIcon,
-  ComputerDesktopIcon,
-  CameraIcon,
-  AcademicCapIcon,
-  HeartIcon,
-  CheckIcon,
   UserGroupIcon,
   ClockIcon,
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
+import { categoriesService } from '../services/categories';
+import CategoryCard from '../components/categories/CategoryCard';
 import Button from '../components/ui/Button';
-import { Card, CardContent } from '../components/ui/Card';
 
 const HomePage = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [popularCategories, setPopularCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesError, setCategoriesError] = useState(null);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    loadPopularCategories();
+  }, []);
+
+  const loadPopularCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      setCategoriesError(null);
+      const categories = await categoriesService.getPopularCategories(7);
+      setPopularCategories(categories);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      setCategoriesError('Не удалось загрузить категории');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
     if (searchQuery.trim()) {
       navigate(`/orders?search=${encodeURIComponent(searchQuery.trim())}`);
     }
   };
 
-  const popularCategories = [
-    {
-      name: 'Ремонт и строительство',
-      nameUz: 'Ta\'mirlash va qurilish',
-      icon: WrenchScrewdriverIcon,
-      color: 'bg-orange-500',
-      count: '250+ мастеров',
-    },
-    {
-      name: 'Уборка',
-      nameUz: 'Tozalash',
-      icon: SparklesIcon,
-      color: 'bg-green-500',
-      count: '180+ исполнителей',
-    },
-    {
-      name: 'Доставка',
-      nameUz: 'Yetkazib berish',
-      icon: TruckIcon,
-      color: 'bg-blue-500',
-      count: '320+ курьеров',
-    },
-    {
-      name: 'IT услуги',
-      nameUz: 'IT xizmatlari',
-      icon: ComputerDesktopIcon,
-      color: 'bg-purple-500',
-      count: '95+ специалистов',
-    },
-    {
-      name: 'Фото и видео',
-      nameUz: 'Foto va video',
-      icon: CameraIcon,
-      color: 'bg-pink-500',
-      count: '75+ фотографов',
-    },
-    {
-      name: 'Репетиторы',
-      nameUz: 'Repetitorlar',
-      icon: AcademicCapIcon,
-      color: 'bg-indigo-500',
-      count: '120+ преподавателей',
-    },
-    {
-      name: 'Красота и здоровье',
-      nameUz: 'Go\'zallik va salomatlik',
-      icon: HeartIcon,
-      color: 'bg-red-500',
-      count: '90+ мастеров',
-    },
-  ];
+  const handleCategoryClick = (category) => {
+    navigate(`/categories/${category.slug || category.id}`);
+  };
+
+  const handleRetryCategories = () => {
+    loadPopularCategories();
+  };
 
   const howItWorks = [
     {
@@ -121,6 +90,92 @@ const HomePage = () => {
     }
   ];
 
+  const renderPopularCategoriesSection = () => {
+    if (categoriesLoading) {
+      return (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <div key={index} className="animate-pulse">
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex flex-col items-center text-center space-y-3">
+                  <div className="w-12 h-12 bg-gray-200 rounded-2xl"></div>
+                  <div className="w-24 h-4 bg-gray-200 rounded"></div>
+                  <div className="w-16 h-3 bg-gray-200 rounded"></div>
+                  <div className="w-20 h-3 bg-gray-200 rounded"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (categoriesError) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-red-500 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Ошибка загрузки
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {categoriesError}
+          </p>
+          <Button onClick={handleRetryCategories}>
+            Попробовать снова
+          </Button>
+        </div>
+      );
+    }
+
+    if (popularCategories.length === 0) {
+      return (
+        <div className="text-center py-12">
+          <div className="text-gray-400 mb-4">
+            <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            Категории не найдены
+          </h3>
+          <p className="text-gray-600 mb-4">
+            В данный момент нет доступных категорий
+          </p>
+          <Button onClick={handleRetryCategories}>
+            Обновить
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {popularCategories.map((category) => (
+            <CategoryCard
+              key={category.id}
+              category={category}
+              onClick={handleCategoryClick}
+            />
+          ))}
+        </div>
+
+        <div className="text-center mt-8">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/categories')}
+          >
+            Посмотреть все категории
+          </Button>
+        </div>
+      </>
+    );
+  };
+
   return (
     <div className="bg-white">
       {/* Hero Section */}
@@ -139,7 +194,7 @@ const HomePage = () => {
             </p>
             
             {/* Search Form */}
-            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
+            <div className="max-w-2xl mx-auto">
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
                   <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -148,14 +203,19 @@ const HomePage = () => {
                     placeholder="Что нужно сделать? Например: установить кондиционер"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
                     className="w-full pl-12 pr-4 py-4 text-gray-900 bg-white rounded-xl border-0 shadow-lg focus:ring-2 focus:ring-primary-300 text-lg"
                   />
                 </div>
-                <Button type="submit" size="lg" className="bg-white text-primary-600 hover:bg-gray-50 px-8">
+                <Button 
+                  onClick={handleSearch}
+                  size="lg" 
+                  className="bg-white text-primary-600 hover:bg-gray-50 px-8"
+                >
                   Найти
                 </Button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       </section>
@@ -172,27 +232,7 @@ const HomePage = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {popularCategories.map((category, index) => {
-              const IconComponent = category.icon;
-              return (
-                <Card
-                  key={index}
-                  className="hover:shadow-lg transition-all duration-200 cursor-pointer group"
-                  onClick={() => navigate('/orders')}
-                >
-                  <CardContent className="p-6 text-center">
-                    <div className={`${category.color} w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-200`}>
-                      <IconComponent className="w-8 h-8 text-white" />
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-2">{category.name}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{category.nameUz}</p>
-                    <p className="text-xs text-primary-600 font-medium">{category.count}</p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          {renderPopularCategoriesSection()}
         </div>
       </section>
 
@@ -265,7 +305,6 @@ const HomePage = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
               size="lg"
-              variant="secondary"
               onClick={() => navigate('/orders/create')}
               className="bg-white text-primary-600 hover:bg-gray-50"
             >

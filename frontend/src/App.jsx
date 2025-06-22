@@ -10,6 +10,8 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import CategoriesPage from './pages/CategoriesPage';
+import CategoryDetailPage from './pages/CategoryDetailPage';
 
 
 // Create a query client
@@ -68,6 +70,24 @@ function AppContent() {
             </PublicRoute>
           } 
         />
+
+      <Route 
+        path="/categories" 
+        element={
+          <Layout>
+            <CategoriesPage />
+          </Layout>
+        } 
+      />
+
+      <Route 
+        path="/categories/:categoryId" 
+        element={
+          <Layout>
+            <CategoryDetailPage />
+          </Layout>
+        } 
+      />
 
         {/* Protected routes */}
         <Route 
