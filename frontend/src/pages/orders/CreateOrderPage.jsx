@@ -1,10 +1,10 @@
+// frontend/src/pages/orders/CreateOrderPage.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { useAuth } from '../../context/AuthContext';
 import { categoriesService } from '../../services/categories';
 import { ordersService } from '../../services/orders';
-import Layout from '../../components/layout/Layout';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import { Card, CardContent, CardHeader } from '../../components/ui/Card';
@@ -24,6 +24,7 @@ const CreateOrderPage = () => {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [step, setStep] = useState(1);
 
   const {
@@ -44,17 +45,40 @@ const CreateOrderPage = () => {
   const watchPriceType = watch('priceType');
   const watchBudgetFrom = watch('budgetFrom');
 
+  // Проверяем права доступа при загрузке компонента
   useEffect(() => {
+    console.log('CreateOrderPage mounted. User:', user);
+    
+    if (!user) {
+      console.log('No user found, redirecting to login');
+      navigate('/login');
+      return;
+    }
+
+    if (user.userType !== 'customer' && user.userType !== 'both') {
+      console.log('User type not allowed:', user.userType);
+      toast.error('У вас нет прав для создания заказов');
+      navigate('/');
+      return;
+    }
+
     loadCategories();
-  }, []);
+  }, [user, navigate]);
 
   const loadCategories = async () => {
     try {
+      setCategoriesLoading(true);
+      console.log('Loading categories...');
+      
       const response = await categoriesService.getCategoriesTree(true);
+      console.log('Categories loaded:', response);
+      
       setCategories(response);
     } catch (error) {
       console.error('Error loading categories:', error);
       toast.error('Ошибка загрузки категорий');
+    } finally {
+      setCategoriesLoading(false);
     }
   };
 
@@ -64,7 +88,9 @@ const CreateOrderPage = () => {
       return;
     }
 
+    console.log('Submitting order:', { ...data, categoryId: selectedCategory.id });
     setLoading(true);
+    
     try {
       const orderData = {
         ...data,
@@ -74,6 +100,7 @@ const CreateOrderPage = () => {
       };
 
       const response = await ordersService.createOrder(orderData);
+      console.log('Order created successfully:', response);
       
       toast.success('Заказ успешно создан!');
       navigate(`/orders/${response.id}`);
@@ -87,6 +114,7 @@ const CreateOrderPage = () => {
   };
 
   const handleCategorySelect = (category) => {
+    console.log('Category selected:', category);
     setSelectedCategory(category);
     setStep(2);
   };
@@ -139,46 +167,97 @@ const CreateOrderPage = () => {
     }
   ];
 
-  const renderCategoryStep = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">
-          Выберите категорию услуги
-        </h2>
-        <p className="text-gray-600">
-          Это поможет исполнителям лучше понять, какая помощь вам нужна
-        </p>
-      </div>
+  const renderCategoryStep = () => {
+    if (categoriesLoading) {
+      return (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Загрузка категорий...
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="animate-pulse">
+                <div className="p-6 border border-gray-200 rounded-xl">
+                  <div className="flex items-center space-x-3 mb-3">
+                    <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                  <div className="h-3 bg-gray-200 rounded w-full"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((category) => (
-          <button
-            key={category.id}
-            onClick={() => handleCategorySelect(category)}
-            className="p-6 text-left border border-gray-200 rounded-xl hover:border-primary-300 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
-          >
-            <div className="flex items-center space-x-3 mb-3">
-              <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                style={{ backgroundColor: category.color || '#3B82F6' }}
-              >
-                <span className="text-white">{category.iconUrl || '🔧'}</span>
+    if (categories.length === 0) {
+      return (
+        <div className="space-y-6">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Выберите категорию услуги
+            </h2>
+            <p className="text-gray-600">
+              Категории недоступны. Попробуйте обновить страницу.
+            </p>
+            <Button 
+              onClick={loadCategories}
+              className="mt-4"
+            >
+              Обновить
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Выберите категорию услуги
+          </h2>
+          <p className="text-gray-600">
+            Это поможет исполнителям лучше понять, какая помощь вам нужна
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              onClick={() => handleCategorySelect(category)}
+              className="p-6 text-left border border-gray-200 rounded-xl hover:border-primary-300 hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              <div className="flex items-center space-x-3 mb-3">
+                <div 
+                  className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                  style={{ backgroundColor: category.color || '#3B82F6' }}
+                >
+                  <span className="text-white">{category.iconUrl || '🔧'}</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{category.nameRu}</h3>
+                  <p className="text-sm text-gray-500">{category.servicesCount || 0} услуг</p>
+                </div>
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-gray-900">{category.nameRu}</h3>
-                <p className="text-sm text-gray-500">{category.servicesCount || 0} услуг</p>
-              </div>
-            </div>
-            {category.descriptionRu && (
-              <p className="text-sm text-gray-600 line-clamp-2">
-                {category.descriptionRu}
-              </p>
-            )}
-          </button>
-        ))}
+              {category.descriptionRu && (
+                <p className="text-sm text-gray-600 line-clamp-2">
+                  {category.descriptionRu}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderOrderForm = () => (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
@@ -441,46 +520,53 @@ const CreateOrderPage = () => {
     </form>
   );
 
-  return (
-    <Layout>
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Заголовок */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Создать заказ</h1>
-            <p className="text-gray-600 mt-2">
-              Опишите задачу, и исполнители предложат свои услуги
-            </p>
-          </div>
+  // Если пользователь не загружен, показываем загрузку
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
 
-          {/* Индикатор шагов */}
-          <div className="mb-8">
-            <div className="flex items-center">
-              <div className={`flex items-center ${step >= 1 ? 'text-primary-600' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
-                  step >= 1 ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
-                }`}>
-                  1
-                </div>
-                <span className="ml-2 font-medium">Категория</span>
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Заголовок */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Создать заказ</h1>
+          <p className="text-gray-600 mt-2">
+            Опишите задачу, и исполнители предложат свои услуги
+          </p>
+        </div>
+
+        {/* Индикатор шагов */}
+        <div className="mb-8">
+          <div className="flex items-center">
+            <div className={`flex items-center ${step >= 1 ? 'text-primary-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                step >= 1 ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
+              }`}>
+                1
               </div>
-              <div className={`flex-1 h-0.5 mx-4 ${step >= 2 ? 'bg-primary-600' : 'bg-gray-300'}`}></div>
-              <div className={`flex items-center ${step >= 2 ? 'text-primary-600' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
-                  step >= 2 ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
-                }`}>
-                  2
-                </div>
-                <span className="ml-2 font-medium">Детали заказа</span>
+              <span className="ml-2 font-medium">Категория</span>
+            </div>
+            <div className={`flex-1 h-0.5 mx-4 ${step >= 2 ? 'bg-primary-600' : 'bg-gray-300'}`}></div>
+            <div className={`flex items-center ${step >= 2 ? 'text-primary-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 ${
+                step >= 2 ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
+              }`}>
+                2
               </div>
+              <span className="ml-2 font-medium">Детали заказа</span>
             </div>
           </div>
-
-          {/* Контент */}
-          {step === 1 ? renderCategoryStep() : renderOrderForm()}
         </div>
+
+        {/* Контент */}
+        {step === 1 ? renderCategoryStep() : renderOrderForm()}
       </div>
-    </Layout>
+    </div>
   );
 };
 

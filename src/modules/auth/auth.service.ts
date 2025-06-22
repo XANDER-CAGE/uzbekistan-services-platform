@@ -180,15 +180,17 @@ export class AuthService {
   /**
    * Генерация JWT токена
    */
-  private generateJwtToken(user: User): string {
-    const payload = { 
-      sub: user.id, 
-      phone: user.phone,
-      email: user.email,
-      userType: user.userType,
-      role: user.role // Добавляем роль в токен
-    };
-    
-    return this.jwtService.sign(payload);
-  }
+    private generateJwtToken(user: User): string {
+      const payload = { 
+        sub: user.id, 
+        phone: user.phone,
+        email: user.email,
+        userType: user.userType, // Убеждаемся что это строка из enum
+        role: user.role // Добавляем роль в токен
+      };
+      
+      console.log('Generating JWT with payload:', payload);
+      
+      return this.jwtService.sign(payload);
+    }
 }

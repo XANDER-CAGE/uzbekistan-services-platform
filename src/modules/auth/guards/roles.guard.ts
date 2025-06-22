@@ -1,4 +1,3 @@
-// src/modules/auth/guards/roles.guard.ts
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { SetMetadata } from '@nestjs/common';
@@ -26,41 +25,40 @@ export class RolesGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
+    console.log('RolesGuard check:', {
+      requiredRoles,
+      requiredAdminRoles,
+      userType: user?.userType,
+      userRole: user?.role,
+      userId: user?.id
+    });
+
     if (!user) {
+      console.log('RolesGuard: No user found');
       return false;
     }
 
     // Если указаны админские роли, проверяем их
     if (requiredAdminRoles && requiredAdminRoles.length > 0) {
       if (!user.role) {
+        console.log('RolesGuard: User has no role');
         return false;
       }
-      return requiredAdminRoles.includes(user.role);
+      const hasAdminRole = requiredAdminRoles.includes(user.role);
+      console.log('RolesGuard: Admin role check result:', hasAdminRole);
+      return hasAdminRole;
     }
 
     // Если указаны обычные роли, проверяем их
     if (requiredRoles && requiredRoles.length > 0) {
-      return requiredRoles.includes(user.userType) || user.userType === UserType.BOTH;
+      // ИСПРАВЛЕНИЕ: Пользователь с типом BOTH может делать все
+      const hasAccess = requiredRoles.includes(user.userType) || user.userType === UserType.BOTH;
+      console.log('RolesGuard: User type check result:', hasAccess);
+      return hasAccess;
     }
 
     // Если роли не указаны, разрешаем доступ
+    console.log('RolesGuard: No roles required, allowing access');
     return true;
-  }
-}
-
-// Дополнительный guard специально для админки
-@Injectable()
-export class AdminGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
-
-    if (!user || !user.role) {
-      return false;
-    }
-
-    // Разрешаем доступ для всех админских ролей
-    const adminRoles = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MODERATOR];
-    return adminRoles.includes(user.role);
   }
 }

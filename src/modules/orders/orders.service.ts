@@ -53,62 +53,92 @@ import {
      * Создать новый заказ
      */
     async createOrder(customerId: number, createDto: CreateOrderDto): Promise<Order> {
+        console.log('OrdersService.createOrder called:', { customerId, createDto });
+      
         // Проверяем что заказчик существует
         const customer = await this.userRepository.findOne({ where: { id: customerId } });
         if (!customer) {
+          console.error('Customer not found:', customerId);
           throw new NotFoundException('Заказчик не найден');
         }
-    
+      
+        console.log('Customer found:', {
+          id: customer.id,
+          userType: customer.userType,
+          name: `${customer.firstName} ${customer.lastName}`
+        });
+      
         // Проверяем что категория существует
         const category = await this.categoryRepository.findOne({ 
           where: { id: createDto.categoryId, isActive: true } 
         });
         if (!category) {
+          console.error('Category not found or inactive:', createDto.categoryId);
           throw new NotFoundException('Категория не найдена или неактивна');
         }
-    
+      
+        console.log('Category found:', {
+          id: category.id,
+          nameRu: category.nameRu,
+          isActive: category.isActive
+        });
+      
         // Валидируем бюджет
         if (createDto.budgetFrom && createDto.budgetTo && createDto.budgetFrom > createDto.budgetTo) {
           throw new BadRequestException('Минимальный бюджет не может быть больше максимального');
         }
-    
+      
         // Валидируем даты
         const now = new Date();
         if (createDto.preferredStartDate && new Date(createDto.preferredStartDate) < now) {
           throw new BadRequestException('Дата начала работ не может быть в прошлом');
         }
-    
+      
         if (createDto.deadline && new Date(createDto.deadline) < now) {
           throw new BadRequestException('Крайний срок не может быть в прошлом');
         }
-    
+      
         // Создаем заказ
-        const order = this.orderRepository.create({
+        const orderData = {
           customerId,
           ...createDto,
           preferredStartDate: createDto.preferredStartDate ? new Date(createDto.preferredStartDate) : undefined,
           deadline: createDto.deadline ? new Date(createDto.deadline) : undefined,
           status: createDto.publish ? OrderStatus.OPEN : OrderStatus.DRAFT,
           isPublished: createDto.publish || false,
-        });
-    
+        };
+      
+        console.log('Creating order with data:', orderData);
+      
+        const order = this.orderRepository.create(orderData);
         const savedOrder = await this.orderRepository.save(order);
-    
+      
+        console.log('Order saved to database:', { id: savedOrder.id, status: savedOrder.status });
+      
         // Если заказ опубликован, увеличиваем счетчик услуг в категории
         if (createDto.publish) {
           await this.categoryRepository.increment({ id: createDto.categoryId }, 'servicesCount', 1);
+          console.log('Updated category services count');
         }
-    
-        // ИСПРАВЛЕНИЕ: Добавляем проверку на null
+      
+        // Загружаем полную информацию о заказе
         const foundOrder = await this.orderRepository.findOne({
           where: { id: savedOrder.id },
           relations: ['customer', 'category'],
         });
-    
+      
         if (!foundOrder) {
+          console.error('Failed to load created order:', savedOrder.id);
           throw new NotFoundException('Ошибка при создании заказа');
         }
-    
+      
+        console.log('Order created successfully:', {
+          id: foundOrder.id,
+          title: foundOrder.title,
+          status: foundOrder.status,
+          categoryName: foundOrder.category?.nameRu
+        });
+      
         return foundOrder;
       }
     

@@ -20,15 +20,11 @@ import OrderDetailPage from './pages/orders/OrderDetailPage';
 import ApplyOrderPage from './pages/orders/ApplyOrderPage';
 import MyOrdersPage from './pages/orders/MyOrdersPage';
 
-// Executors pages (заготовки для будущего)
-// import ExecutorsPage from './pages/executors/ExecutorsPage';
-// import ExecutorDetailPage from './pages/executors/ExecutorDetailPage';
-
 // Create a query client
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
       retry: 1,
     },
   },
@@ -49,15 +45,23 @@ const ProtectedRoute = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
-// Public Route component (redirect if authenticated)
+// Public Route component
 const PublicRoute = ({ children }) => {
   const { isAuthenticated } = useAuth();
   return !isAuthenticated ? children : <Navigate to="/" replace />;
 };
 
-// Role-based route protection
+// ИСПРАВЛЕННЫЙ Role-based route protection
 const RoleProtectedRoute = ({ children, allowedRoles }) => {
   const { user, isAuthenticated, loading } = useAuth();
+
+  console.log('RoleProtectedRoute Debug:', {
+    isAuthenticated,
+    loading,
+    user,
+    userType: user?.userType,
+    allowedRoles
+  });
 
   if (loading) {
     return (
@@ -68,11 +72,29 @@ const RoleProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   if (!isAuthenticated) {
+    console.log('User not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(user?.userType)) {
-    return <Navigate to="/" replace />;
+  if (!user) {
+    console.log('User object is null, redirecting to login');
+    return <Navigate to="/login" replace />;
+  }
+
+  // ИСПРАВЛЕНИЕ: Проверяем роли правильно
+  if (allowedRoles && allowedRoles.length > 0) {
+    const hasAccess = allowedRoles.includes(user.userType) || user.userType === 'both';
+    
+    console.log('Role check:', {
+      userType: user.userType,
+      allowedRoles,
+      hasAccess
+    });
+    
+    if (!hasAccess) {
+      console.log('Access denied, redirecting to home');
+      return <Navigate to="/" replace />;
+    }
   }
 
   return children;
@@ -85,7 +107,7 @@ function AppContent() {
         {/* Public routes */}
         <Route path="/" element={<Layout><HomePage /></Layout>} />
         
-        {/* Auth routes (redirect if authenticated) */}
+        {/* Auth routes */}
         <Route 
           path="/login" 
           element={
@@ -139,12 +161,14 @@ function AppContent() {
           } 
         />
 
-        {/* Protected order routes */}
+        {/* ИСПРАВЛЕННЫЕ Protected order routes */}
         <Route 
           path="/orders/create" 
           element={
             <RoleProtectedRoute allowedRoles={['customer', 'both']}>
-              <CreateOrderPage />
+              <Layout>
+                <CreateOrderPage />
+              </Layout>
             </RoleProtectedRoute>
           } 
         />
@@ -152,7 +176,9 @@ function AppContent() {
           path="/orders/:id/apply" 
           element={
             <RoleProtectedRoute allowedRoles={['executor', 'both']}>
-              <ApplyOrderPage />
+              <Layout>
+                <ApplyOrderPage />
+              </Layout>
             </RoleProtectedRoute>
           } 
         />
@@ -160,7 +186,9 @@ function AppContent() {
           path="/my-orders" 
           element={
             <ProtectedRoute>
-              <MyOrdersPage />
+              <Layout>
+                <MyOrdersPage />
+              </Layout>
             </ProtectedRoute>
           } 
         />
@@ -177,29 +205,20 @@ function AppContent() {
             </Layout>
           } 
         />
-        <Route 
-          path="/executors/:id" 
-          element={
-            <Layout>
-              <div className="max-w-6xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold">Профиль исполнителя</h1>
-                <p className="text-gray-600 mt-2">Страница в разработке</p>
-              </div>
-            </Layout>
-          } 
-        />
 
         {/* User profile routes */}
         <Route 
           path="/profile" 
           element={
             <ProtectedRoute>
-              <ProfilePage />
+              <Layout>
+                <ProfilePage />
+              </Layout>
             </ProtectedRoute>
           } 
         />
 
-        {/* Help and info pages */}
+        {/* Static pages */}
         <Route 
           path="/how-it-works" 
           element={
@@ -233,67 +252,6 @@ function AppContent() {
           } 
         />
 
-        {/* Admin routes (заготовка) */}
-        <Route 
-          path="/admin/*" 
-          element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Layout>
-                <div className="max-w-6xl mx-auto px-4 py-8">
-                  <h1 className="text-2xl font-bold">Админ панель</h1>
-                  <p className="text-gray-600 mt-2">Страница в разработке</p>
-                </div>
-              </Layout>
-            </RoleProtectedRoute>
-          } 
-        />
-
-        {/* Additional pages */}
-        <Route 
-          path="/become-executor" 
-          element={
-            <Layout>
-              <div className="max-w-4xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold">Стать исполнителем</h1>
-                <div className="mt-6 bg-white rounded-lg p-6 shadow-sm border">
-                  <p className="text-gray-600 mb-4">
-                    Присоединяйтесь к нашей платформе как исполнитель и начните зарабатывать, предоставляя свои услуги.
-                  </p>
-                  <div className="space-y-4">
-                    <div className="flex items-start space-x-3">
-                      <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                        <span className="text-green-600 text-sm">✓</span>
-                      </div>
-                      <div>
-                        <h3 className="font-medium">Свободный график</h3>
-                        <p className="text-gray-600 text-sm">Работайте когда удобно</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                      <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                        <span className="text-green-600 text-sm">✓</span>
-                      </div>
-                      <div>
-                        <h3 className="font-medium">Стабильные заказы</h3>
-                        <p className="text-gray-600 text-sm">Постоянный поток клиентов</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start space-x-3">
-                      <div className="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center mt-0.5">
-                        <span className="text-green-600 text-sm">✓</span>
-                      </div>
-                      <div>
-                        <h3 className="font-medium">Безопасные платежи</h3>
-                        <p className="text-gray-600 text-sm">Гарантированная оплата</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Layout>
-          } 
-        />
-
         {/* Help pages */}
         <Route 
           path="/help" 
@@ -307,65 +265,7 @@ function AppContent() {
           } 
         />
 
-        <Route 
-          path="/contacts" 
-          element={
-            <Layout>
-              <div className="max-w-4xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold">Контакты</h1>
-                <div className="mt-6 bg-white rounded-lg p-6 shadow-sm border">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold mb-2">Служба поддержки</h3>
-                      <p className="text-gray-600">support@uslugiuz.com</p>
-                      <p className="text-gray-600">+998 (71) 123-45-67</p>
-                    </div>
-                    <div>
-                      <h3 className="font-semibold mb-2">Офис</h3>
-                      <p className="text-gray-600">г. Ташкент, Юнусабадский район</p>
-                      <p className="text-gray-600">ул. Амира Темура, 15</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Layout>
-          } 
-        />
-
-        {/* Static pages */}
-        <Route 
-          path="/terms" 
-          element={
-            <Layout>
-              <div className="max-w-4xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold">Пользовательское соглашение</h1>
-                <div className="mt-6 prose max-w-none">
-                  <p className="text-gray-600">
-                    Настоящее пользовательское соглашение регулирует отношения между пользователями платформы УслугиУз...
-                  </p>
-                </div>
-              </div>
-            </Layout>
-          } 
-        />
-
-        <Route 
-          path="/privacy" 
-          element={
-            <Layout>
-              <div className="max-w-4xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold">Политика конфиденциальности</h1>
-                <div className="mt-6 prose max-w-none">
-                  <p className="text-gray-600">
-                    Настоящая политика конфиденциальности определяет, какая информация собирается на нашем сайте...
-                  </p>
-                </div>
-              </div>
-            </Layout>
-          } 
-        />
-
-        {/* Messages/Chat routes (заготовка) */}
+        {/* Messages/Chat routes */}
         <Route 
           path="/messages" 
           element={
@@ -374,34 +274,6 @@ function AppContent() {
                 <div className="max-w-6xl mx-auto px-4 py-8">
                   <h1 className="text-2xl font-bold">Сообщения</h1>
                   <p className="text-gray-600 mt-2">Чат с заказчиками и исполнителями (в разработке)</p>
-                </div>
-              </Layout>
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/orders/:orderId/messages" 
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <div className="max-w-4xl mx-auto px-4 py-8">
-                  <h1 className="text-2xl font-bold">Чат по заказу</h1>
-                  <p className="text-gray-600 mt-2">Общение с исполнителем/заказчиком (в разработке)</p>
-                </div>
-              </Layout>
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* Notifications route (заготовка) */}
-        <Route 
-          path="/notifications" 
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <div className="max-w-4xl mx-auto px-4 py-8">
-                  <h1 className="text-2xl font-bold">Уведомления</h1>
-                  <p className="text-gray-600 mt-2">Ваши уведомления (в разработке)</p>
                 </div>
               </Layout>
             </ProtectedRoute>

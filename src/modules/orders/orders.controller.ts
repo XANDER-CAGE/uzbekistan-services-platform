@@ -51,21 +51,34 @@ import {
     @Roles([UserType.CUSTOMER, UserType.BOTH])
     @ApiBearerAuth()
     @ApiOperation({ 
-      summary: 'Создать заказ',
-      description: 'Создает новый заказ от имени заказчика' 
+    summary: 'Создать заказ',
+    description: 'Создает новый заказ от имени заказчика' 
     })
     @ApiResponse({ 
-      status: 201, 
-      description: 'Заказ создан',
-      type: Order
+    status: 201, 
+    description: 'Заказ создан',
+    type: Order
     })
     @ApiResponse({ status: 404, description: 'Категория не найдена' })
     @ApiResponse({ status: 400, description: 'Некорректные данные' })
     async createOrder(
-      @CurrentUser() user: User,
-      @Body() createDto: CreateOrderDto,
+    @CurrentUser() user: User,
+    @Body() createDto: CreateOrderDto,
     ) {
-      return this.ordersService.createOrder(user.id, createDto);
+    console.log('Creating order:', {
+        userId: user.id,
+        userType: user.userType,
+        createDto
+    });
+
+    try {
+        const result = await this.ordersService.createOrder(user.id, createDto);
+        console.log('Order created successfully:', { orderId: result.id });
+        return result;
+    } catch (error) {
+        console.error('Error creating order:', error);
+        throw error;
+    }
     }
   
     @Get()

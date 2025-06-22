@@ -100,45 +100,26 @@ import {
   
     @Get('tree')
     @ApiOperation({ 
-      summary: 'Получить дерево категорий',
-      description: 'Возвращает иерархическое дерево всех категорий' 
+    summary: 'Получить дерево категорий',
+    description: 'Возвращает иерархическое дерево всех категорий' 
     })
     @ApiQuery({ name: 'onlyActive', required: false, description: 'Только активные категории' })
     @ApiResponse({ 
-      status: 200, 
-      description: 'Дерево категорий получено',
-      schema: {
-        example: [
-          {
-            id: 1,
-            nameRu: "Ремонт и строительство",
-            nameUz: "Ta'mirlash va qurilish",
-            iconUrl: "https://example.com/repair-icon.svg",
-            color: "#FF5722",
-            isActive: true,
-            children: [
-              {
-                id: 2,
-                nameRu: "Электрика",
-                nameUz: "Elektr ishlari",
-                parentId: 1,
-                children: []
-              },
-              {
-                id: 3,
-                nameRu: "Сантехника",
-                nameUz: "Santexnika",
-                parentId: 1,
-                children: []
-              }
-            ]
-          }
-        ]
-      }
+    status: 200, 
+    description: 'Дерево категорий получено'
     })
     async getCategoriesTree(@Query('onlyActive') onlyActive?: string) {
-      const isOnlyActive = onlyActive === 'true';
-      return this.categoriesService.getCategoriesTree(isOnlyActive);
+    console.log('Getting categories tree, onlyActive:', onlyActive);
+    
+    try {
+        const isOnlyActive = onlyActive === 'true';
+        const result = await this.categoriesService.getCategoriesTree(isOnlyActive);
+        console.log('Categories tree loaded:', result?.length || 0, 'categories');
+        return result;
+    } catch (error) {
+        console.error('Error loading categories tree:', error);
+        throw error;
+    }
     }
   
     @Get('popular')
