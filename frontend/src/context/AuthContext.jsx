@@ -92,9 +92,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (credentials) => {
-    // Если передан готовый объект с user и access_token (для обновления)
+    // Проверка входных данных
+    if (!credentials) {
+      throw new Error('Не переданы данные для входа');
+    }
+  
+    // Если передан готовый объект с user и access_token
     if (credentials.user && credentials.access_token) {
-      console.log('Login with ready credentials:', credentials);
+      if (!credentials.user.id) {
+        throw new Error('Некорректные данные пользователя');
+      }
       
       localStorage.setItem('access_token', credentials.access_token);
       localStorage.setItem('user', JSON.stringify(credentials.user));
@@ -106,6 +113,39 @@ export const AuthProvider = ({ children }) => {
       
       return credentials;
     }
+  
+    // Валидация логина и пароля
+    if (!credentials.login || !credentials.password) {
+      throw new Error('Укажите логин и пароль');
+    }
+  
+    dispatch({ type: 'LOGIN_START' });
+    
+    try {
+      const response = await authService.login(credentials);
+      
+      if (!response.user || !response.access_token) {
+        throw new Error('Некорректный ответ сервера');
+      }
+      
+      localStorage.setItem('access_token', response.access_token);
+      localStorage.setItem('user', JSON.stringify(response.user));
+      
+      dispatch({
+        type: 'LOGIN_SUCCESS',
+        payload: response
+      });
+      
+      return response;
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.message || 'Ошибка входа';
+      dispatch({
+        type: 'LOGIN_ERROR',
+        payload: errorMessage
+      });
+      throw error;
+    }
+  };
   
     // Обычный логин
     console.log('Starting login with credentials:', { login: credentials.login });

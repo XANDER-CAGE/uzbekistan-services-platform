@@ -6,8 +6,11 @@ import { twMerge } from 'tailwind-merge';
  * Комбинирует clsx для условных классов и tailwind-merge для разрешения конфликтов Tailwind
  */
 export function cn(...inputs) {
-  return twMerge(clsx(inputs));
-}
+    return inputs
+      .flat()
+      .filter(Boolean)
+      .join(' ');
+  }
 
 /**
  * Альтернативная утилита без tailwind-merge (если пакет не установлен)

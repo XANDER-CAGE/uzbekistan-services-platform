@@ -98,41 +98,44 @@ const ApplyOrderPage = () => {
   };
 
   const onSubmit = async (data) => {
+    if (!order || !user) {
+      toast.error('Недостаточно данных для подачи заявки');
+      return;
+    }
+  
     try {
       setSubmitting(true);
       
       const applicationData = {
         proposedPrice: data.proposedPrice ? Number(data.proposedPrice) : undefined,
         proposedDurationDays: data.proposedDurationDays ? Number(data.proposedDurationDays) : undefined,
-        message: data.message,
+        message: data.message?.trim(),
         availableFrom: data.availableFrom || undefined,
       };
   
-      // ИСПРАВЛЕНИЕ: Убираем пустые поля
+      // Убираем пустые поля
       Object.keys(applicationData).forEach(key => {
         if (applicationData[key] === undefined || applicationData[key] === '') {
           delete applicationData[key];
         }
       });
   
-      console.log('Submitting application:', applicationData);
-  
       await ordersService.createApplication(id, applicationData);
-      
       toast.success('Заявка успешно подана!');
       navigate(`/orders/${id}`);
     } catch (error) {
       console.error('Submit application error:', error);
       
-      // ИСПРАВЛЕНИЕ: Улучшенная обработка ошибок
-      if (error.response?.status === 404) {
+      const status = error.response?.status;
+      const message = error.response?.data?.message;
+      
+      if (status === 404) {
         toast.error('Заказ не найден');
-      } else if (error.response?.status === 400) {
-        const message = error.response?.data?.message || 'Заказ не принимает заявки';
-        toast.error(message);
-      } else if (error.response?.status === 409) {
+      } else if (status === 400) {
+        toast.error(message || 'Некорректные данные заявки');
+      } else if (status === 409) {
         toast.error('Вы уже подавали заявку на этот заказ');
-      } else if (error.response?.status === 403) {
+      } else if (status === 403) {
         toast.error('У вас нет прав для подачи заявки');
       } else {
         toast.error('Ошибка при подаче заявки');

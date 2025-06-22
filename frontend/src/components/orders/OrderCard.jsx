@@ -60,10 +60,13 @@ const OrderCard = ({ order, onOrderClick, onApplyClick, showApplyButton = false 
   };
 
   const formatBudget = () => {
+    if (!order) return 'Не указан'; // Добавить проверку
+    
     if (order.priceType === 'negotiable') {
       return 'Договорная';
     }
     
+    // Безопасный доступ к свойствам
     if (order.budgetFrom && order.budgetTo && order.budgetFrom !== order.budgetTo) {
       return `${order.budgetFrom.toLocaleString()} - ${order.budgetTo.toLocaleString()} сум`;
     }
