@@ -6,7 +6,7 @@ import {
     ConflictException
   } from '@nestjs/common';
   import { InjectRepository } from '@nestjs/typeorm';
-  import { Repository, DataSource } from 'typeorm';
+  import { Repository, DataSource, In } from 'typeorm'; // Added 'In' import
   import { Order, OrderStatus } from './entities/order.entity';
   import { OrderApplication, ApplicationStatus } from './entities/order-application.entity';
   import { User, UserType } from '../users/entities/user.entity';
@@ -16,6 +16,14 @@ import {
   import { CreateApplicationDto } from './dto/create-application.dto';
   import { OrdersFilterDto } from './dto/orders-filter.dto';
   import { UpdateOrderStatusDto, CompleteOrderDto } from './dto/update-order-status.dto';
+  
+  // Add missing enum if not defined elsewhere
+  export enum OrderUrgency {
+    LOW = 'low',
+    MEDIUM = 'medium',
+    HIGH = 'high',
+    URGENT = 'urgent'
+  }
   
   export interface PaginatedOrders {
     orders: Order[];
@@ -31,6 +39,25 @@ import {
     page: number;
     limit: number;
     totalPages: number;
+  }
+  
+  export interface DashboardStats {
+    customer: {
+      totalOrders: number;
+      activeOrders: number;
+      completedOrders: number;
+      cancelledOrders: number;
+      totalSpent: number;
+      averageRating: number;
+    };
+    executor: {
+      totalApplications: number;
+      acceptedApplications: number;
+      completedOrders: number;
+      totalEarned: number;
+      averageRating: number;
+      responseRate: number;
+    };  
   }
   
   @Injectable()
@@ -53,159 +80,160 @@ import {
      * Создать новый заказ
      */
     async createOrder(customerId: number, createDto: CreateOrderDto): Promise<Order> {
-        console.log('OrdersService.createOrder called:', { customerId, createDto });
-      
-        // Проверяем что заказчик существует
-        const customer = await this.userRepository.findOne({ where: { id: customerId } });
-        if (!customer) {
-          console.error('Customer not found:', customerId);
-          throw new NotFoundException('Заказчик не найден');
-        }
-      
-        console.log('Customer found:', {
-          id: customer.id,
-          userType: customer.userType,
-          name: `${customer.firstName} ${customer.lastName}`
-        });
-      
-        // Проверяем что категория существует
-        const category = await this.categoryRepository.findOne({ 
-          where: { id: createDto.categoryId, isActive: true } 
-        });
-        if (!category) {
-          console.error('Category not found or inactive:', createDto.categoryId);
-          throw new NotFoundException('Категория не найдена или неактивна');
-        }
-      
-        console.log('Category found:', {
-          id: category.id,
-          nameRu: category.nameRu,
-          isActive: category.isActive
-        });
-      
-        // Валидируем бюджет
-        if (createDto.budgetFrom && createDto.budgetTo && createDto.budgetFrom > createDto.budgetTo) {
-          throw new BadRequestException('Минимальный бюджет не может быть больше максимального');
-        }
-      
-        // Валидируем даты
-        const now = new Date();
-        if (createDto.preferredStartDate && new Date(createDto.preferredStartDate) < now) {
-          throw new BadRequestException('Дата начала работ не может быть в прошлом');
-        }
-      
-        if (createDto.deadline && new Date(createDto.deadline) < now) {
-          throw new BadRequestException('Крайний срок не может быть в прошлом');
-        }
-      
-        // Создаем заказ
-        const orderData = {
-          customerId,
-          ...createDto,
-          preferredStartDate: createDto.preferredStartDate ? new Date(createDto.preferredStartDate) : undefined,
-          deadline: createDto.deadline ? new Date(createDto.deadline) : undefined,
-          status: createDto.publish ? OrderStatus.OPEN : OrderStatus.DRAFT,
-          isPublished: createDto.publish || false,
-        };
-      
-        console.log('Creating order with data:', orderData);
-      
-        const order = this.orderRepository.create(orderData);
-        const savedOrder = await this.orderRepository.save(order);
-      
-        console.log('Order saved to database:', { id: savedOrder.id, status: savedOrder.status });
-      
-        // Если заказ опубликован, увеличиваем счетчик услуг в категории
-        if (createDto.publish) {
-          await this.categoryRepository.increment({ id: createDto.categoryId }, 'servicesCount', 1);
-          console.log('Updated category services count');
-        }
-      
-        // Загружаем полную информацию о заказе
-        const foundOrder = await this.orderRepository.findOne({
-          where: { id: savedOrder.id },
-          relations: ['customer', 'category'],
-        });
-      
-        if (!foundOrder) {
-          console.error('Failed to load created order:', savedOrder.id);
-          throw new NotFoundException('Ошибка при создании заказа');
-        }
-      
-        console.log('Order created successfully:', {
-          id: foundOrder.id,
-          title: foundOrder.title,
-          status: foundOrder.status,
-          categoryName: foundOrder.category?.nameRu
-        });
-      
-        return foundOrder;
+      console.log('OrdersService.createOrder called:', { customerId, createDto });
+    
+      // Проверяем что заказчик существует
+      const customer = await this.userRepository.findOne({ where: { id: customerId } });
+      if (!customer) {
+        console.error('Customer not found:', customerId);
+        throw new NotFoundException('Заказчик не найден');
       }
     
-      /**
-       * Подать заявку на заказ - ИСПРАВЛЕННАЯ ВЕРСИЯ
-       */
-      async createApplication(
-        executorUserId: number, 
-        orderId: number, 
-        createDto: CreateApplicationDto
-      ): Promise<OrderApplication> {
-        // Проверяем что заказ существует и доступен для заявок
-        const order = await this.orderRepository.findOne({ where: { id: orderId } });
-        if (!order) {
-          throw new NotFoundException('Заказ не найден');
-        }
+      console.log('Customer found:', {
+        id: customer.id,
+        userType: customer.userType,
+        name: `${customer.firstName} ${customer.lastName}`
+      });
     
-        if (!order.canReceiveApplications) {
-          throw new BadRequestException('Заказ не принимает заявки');
-        }
-    
-        // Проверяем что исполнитель существует
-        const executor = await this.executorRepository.findOne({ 
-          where: { userId: executorUserId } 
-        });
-        if (!executor) {
-          throw new NotFoundException('Профиль исполнителя не найден');
-        }
-    
-        // Проверяем что исполнитель не владелец заказа
-        if (order.customerId === executorUserId) {
-          throw new BadRequestException('Нельзя подавать заявку на собственный заказ');
-        }
-    
-        // Проверяем что заявка еще не подана
-        const existingApplication = await this.applicationRepository.findOne({
-          where: { orderId, executorId: executor.id }
-        });
-        if (existingApplication) {
-          throw new ConflictException('Заявка уже подана на этот заказ');
-        }
-    
-        // Создаем заявку
-        const application = this.applicationRepository.create({
-          orderId,
-          executorId: executor.id,
-          ...createDto,
-          availableFrom: createDto.availableFrom ? new Date(createDto.availableFrom) : undefined,
-        });
-    
-        const savedApplication = await this.applicationRepository.save(application);
-    
-        // Увеличиваем счетчик заявок
-        await this.orderRepository.increment({ id: orderId }, 'applicationsCount', 1);
-    
-        // ИСПРАВЛЕНИЕ: Добавляем проверку на null
-        const foundApplication = await this.applicationRepository.findOne({
-          where: { id: savedApplication.id },
-          relations: ['executor', 'executor.user', 'order'],
-        });
-    
-        if (!foundApplication) {
-          throw new NotFoundException('Ошибка при создании заявки');
-        }
-    
-        return foundApplication;
+      // Проверяем что категория существует
+      const category = await this.categoryRepository.findOne({ 
+        where: { id: createDto.categoryId, isActive: true } 
+      });
+      if (!category) {
+        console.error('Category not found or inactive:', createDto.categoryId);
+        throw new NotFoundException('Категория не найдена или неактивна');
       }
+    
+      console.log('Category found:', {
+        id: category.id,
+        nameRu: category.nameRu,
+        isActive: category.isActive
+      });
+    
+      // Валидируем бюджет
+      if (createDto.budgetFrom && createDto.budgetTo && createDto.budgetFrom > createDto.budgetTo) {
+        throw new BadRequestException('Минимальный бюджет не может быть больше максимального');
+      }
+    
+      // Валидируем даты
+      const now = new Date();
+      if (createDto.preferredStartDate && new Date(createDto.preferredStartDate) < now) {
+        throw new BadRequestException('Дата начала работ не может быть в прошлом');
+      }
+    
+      if (createDto.deadline && new Date(createDto.deadline) < now) {
+        throw new BadRequestException('Крайний срок не может быть в прошлом');
+      }
+    
+      // Создаем заказ
+      const orderData = {
+        customerId,
+        ...createDto,
+        preferredStartDate: createDto.preferredStartDate ? new Date(createDto.preferredStartDate) : undefined,
+        deadline: createDto.deadline ? new Date(createDto.deadline) : undefined,
+        status: createDto.publish ? OrderStatus.OPEN : OrderStatus.DRAFT,
+        isPublished: createDto.publish || false,
+      };
+    
+      console.log('Creating order with data:', orderData);
+    
+      const order = this.orderRepository.create(orderData);
+      const savedOrder = await this.orderRepository.save(order);
+    
+      console.log('Order saved to database:', { id: savedOrder.id, status: savedOrder.status });
+    
+      // Если заказ опубликован, увеличиваем счетчик услуг в категории
+      if (createDto.publish) {
+        await this.categoryRepository.increment({ id: createDto.categoryId }, 'servicesCount', 1);
+        console.log('Updated category services count');
+      }
+    
+      // Загружаем полную информацию о заказе
+      const foundOrder = await this.orderRepository.findOne({
+        where: { id: savedOrder.id },
+        relations: ['customer', 'category'],
+      });
+    
+      if (!foundOrder) {
+        console.error('Failed to load created order:', savedOrder.id);
+        throw new NotFoundException('Ошибка при создании заказа');
+      }
+    
+      console.log('Order created successfully:', {
+        id: foundOrder.id,
+        title: foundOrder.title,
+        status: foundOrder.status,
+        categoryName: foundOrder.category?.nameRu
+      });
+    
+      return foundOrder;
+    }
+  
+    /**
+     * Подать заявку на заказ - ИСПРАВЛЕННАЯ ВЕРСИЯ
+     */
+    async createApplication(
+      executorUserId: number, 
+      orderId: number, 
+      createDto: CreateApplicationDto
+    ): Promise<OrderApplication> {
+      // Проверяем что заказ существует и доступен для заявок
+      const order = await this.orderRepository.findOne({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException('Заказ не найден');
+      }
+  
+      // Check if order can receive applications (you may need to add this property to Order entity)
+      if (order.status !== OrderStatus.OPEN) {
+        throw new BadRequestException('Заказ не принимает заявки');
+      }
+  
+      // Проверяем что исполнитель существует
+      const executor = await this.executorRepository.findOne({ 
+        where: { userId: executorUserId } 
+      });
+      if (!executor) {
+        throw new NotFoundException('Профиль исполнителя не найден');
+      }
+  
+      // Проверяем что исполнитель не владелец заказа
+      if (order.customerId === executorUserId) {
+        throw new BadRequestException('Нельзя подавать заявку на собственный заказ');
+      }
+  
+      // Проверяем что заявка еще не подана
+      const existingApplication = await this.applicationRepository.findOne({
+        where: { orderId, executorId: executor.id }
+      });
+      if (existingApplication) {
+        throw new ConflictException('Заявка уже подана на этот заказ');
+      }
+  
+      // Создаем заявку
+      const application = this.applicationRepository.create({
+        orderId,
+        executorId: executor.id,
+        ...createDto,
+        availableFrom: createDto.availableFrom ? new Date(createDto.availableFrom) : undefined,
+      });
+  
+      const savedApplication = await this.applicationRepository.save(application);
+  
+      // Увеличиваем счетчик заявок
+      await this.orderRepository.increment({ id: orderId }, 'applicationsCount', 1);
+  
+      // ИСПРАВЛЕНИЕ: Добавляем проверку на null
+      const foundApplication = await this.applicationRepository.findOne({
+        where: { id: savedApplication.id },
+        relations: ['executor', 'executor.user', 'order'],
+      });
+  
+      if (!foundApplication) {
+        throw new NotFoundException('Ошибка при создании заявки');
+      }
+  
+      return foundApplication;
+    }
   
     /**
      * Найти заказы с фильтрацией
@@ -224,16 +252,18 @@ import {
         lat,
         lng,
         radius = 10,
-        customerId
+        customerId,
+        sortBy = 'newest',
+        location
       } = filterDto;
-  
+    
       const skip = (page - 1) * limit;
       const queryBuilder = this.orderRepository.createQueryBuilder('order')
         .leftJoinAndSelect('order.customer', 'customer')
         .leftJoinAndSelect('order.category', 'category')
         .leftJoinAndSelect('order.executor', 'executor')
         .leftJoinAndSelect('executor.user', 'executorUser');
-  
+    
       // Базовые фильтры
       if (customerId) {
         queryBuilder.andWhere('order.customerId = :customerId', { customerId });
@@ -241,7 +271,7 @@ import {
         // Для публичного поиска показываем только опубликованные заказы
         queryBuilder.andWhere('order.isPublished = :published', { published: true });
       }
-  
+    
       // Поиск по тексту
       if (search) {
         queryBuilder.andWhere(
@@ -249,36 +279,41 @@ import {
           { search: `%${search}%` }
         );
       }
-  
+    
       // Фильтр по категории
       if (categoryId) {
         queryBuilder.andWhere('order.categoryId = :categoryId', { categoryId });
       }
-  
+    
       // Фильтр по статусу
       if (status) {
         queryBuilder.andWhere('order.status = :status', { status });
       }
-  
+    
       // Фильтр по срочности
       if (urgency) {
         queryBuilder.andWhere('order.urgency = :urgency', { urgency });
       }
-  
+    
       // Фильтр по типу ценообразования
       if (priceType) {
         queryBuilder.andWhere('order.priceType = :priceType', { priceType });
       }
-  
+    
       // Фильтр по бюджету
       if (minBudget) {
         queryBuilder.andWhere('(order.budgetFrom >= :minBudget OR order.budgetTo >= :minBudget)', { minBudget });
       }
-  
+    
       if (maxBudget) {
         queryBuilder.andWhere('(order.budgetFrom <= :maxBudget OR order.budgetTo <= :maxBudget)', { maxBudget });
       }
-  
+    
+      // Фильтр по адресу/местоположению
+      if (location) {
+        queryBuilder.andWhere('order.address ILIKE :location', { location: `%${location}%` });
+      }
+    
       // Геолокационный поиск
       if (lat && lng) {
         queryBuilder.andWhere(
@@ -292,16 +327,14 @@ import {
           { lat, lng, radius }
         );
       }
-  
-      // Сортировка: сначала срочные, потом по дате создания
-      queryBuilder
-        .orderBy('order.urgency', 'DESC')
-        .addOrderBy('order.createdAt', 'DESC')
-        .skip(skip)
-        .take(limit);
-  
+    
+      // ОБНОВЛЕННАЯ ЛОГИКА СОРТИРОВКИ
+      this.applySorting(queryBuilder, sortBy);
+    
+      queryBuilder.skip(skip).take(limit);
+    
       const [orders, total] = await queryBuilder.getManyAndCount();
-  
+    
       return {
         orders,
         total,
@@ -309,6 +342,72 @@ import {
         limit,
         totalPages: Math.ceil(total / limit),
       };
+    }
+    
+    /**
+     * Применить сортировку к запросу
+     */
+    private applySorting(queryBuilder: any, sortBy: string): void {
+      switch (sortBy) {
+        case 'newest':
+          queryBuilder
+            .orderBy('order.createdAt', 'DESC');
+          break;
+          
+        case 'oldest':
+          queryBuilder
+            .orderBy('order.createdAt', 'ASC');
+          break;
+          
+        case 'budget_high':
+          queryBuilder
+            .orderBy('COALESCE(order.budgetTo, order.budgetFrom, 0)', 'DESC')
+            .addOrderBy('order.createdAt', 'DESC');
+          break;
+          
+        case 'budget_low':
+          queryBuilder
+            .orderBy('COALESCE(order.budgetFrom, order.budgetTo, 999999999)', 'ASC')
+            .addOrderBy('order.createdAt', 'DESC');
+          break;
+          
+        case 'urgent':
+          queryBuilder
+            .addSelect(`
+              CASE order.urgency 
+                WHEN 'urgent' THEN 4
+                WHEN 'high' THEN 3
+                WHEN 'medium' THEN 2
+                WHEN 'low' THEN 1
+                ELSE 0
+              END
+            `, 'urgency_priority')
+            .orderBy('urgency_priority', 'DESC')
+            .addOrderBy('order.createdAt', 'DESC');
+          break;
+          
+        case 'popular':
+          queryBuilder
+            .orderBy('order.viewsCount', 'DESC')
+            .addOrderBy('order.applicationsCount', 'DESC')
+            .addOrderBy('order.createdAt', 'DESC');
+          break;
+          
+        default:
+          // По умолчанию: сначала срочные, потом по дате создания
+          queryBuilder
+            .addSelect(`
+              CASE order.urgency 
+                WHEN 'urgent' THEN 4
+                WHEN 'high' THEN 3
+                WHEN 'medium' THEN 2
+                WHEN 'low' THEN 1
+                ELSE 0
+              END
+            `, 'urgency_priority')
+            .orderBy('urgency_priority', 'DESC')
+            .addOrderBy('order.createdAt', 'DESC');
+      }
     }
   
     /**
@@ -617,5 +716,386 @@ import {
       if (!validTransition) {
         throw new BadRequestException(`Недопустимый переход статуса из ${currentStatus} в ${newStatus}`);
       }
+    }
+  
+    async addAttachments(orderId: number, customerId: number, attachmentUrls: string[]): Promise<Order> {
+      const order = await this.orderRepository.findOne({ where: { id: orderId } });
+      
+      if (!order) {
+        throw new NotFoundException('Заказ не найден');
+      }
+  
+      // Проверяем права доступа
+      if (order.customerId !== customerId) {
+        throw new ForbiddenException('Нет прав для добавления файлов к этому заказу');
+      }
+  
+      // Проверяем статус заказа (можно добавлять файлы только к активным заказам)
+      if (![OrderStatus.DRAFT, OrderStatus.OPEN, OrderStatus.IN_PROGRESS].includes(order.status)) {
+        throw new BadRequestException('Нельзя добавлять файлы к заказу в текущем статусе');
+      }
+  
+      // Добавляем новые файлы к существующим
+      order.attachments = [...order.attachments, ...attachmentUrls];
+      
+      // Ограничиваем количество файлов (максимум 10)
+      if (order.attachments.length > 10) {
+        throw new BadRequestException('Максимальное количество файлов: 10');
+      }
+  
+      return this.orderRepository.save(order);
+    }
+  
+    async getDashboardStats(userId: number): Promise<DashboardStats> {
+      const user = await this.userRepository.findOne({ 
+        where: { id: userId },
+        relations: ['executorProfile']
+      });
+  
+      if (!user) {
+        throw new NotFoundException('Пользователь не найден');
+      }
+  
+      const stats: DashboardStats = {
+        customer: {
+          totalOrders: 0,
+          activeOrders: 0,
+          completedOrders: 0,
+          cancelledOrders: 0,
+          totalSpent: 0,
+          averageRating: 0,
+        },
+        executor: {
+          totalApplications: 0,
+          acceptedApplications: 0,
+          completedOrders: 0,
+          totalEarned: 0,
+          averageRating: 0,
+          responseRate: 0,
+        }
+      };
+  
+      // Статистика как заказчик
+      if (user.userType === UserType.CUSTOMER || user.userType === UserType.BOTH) {
+        const customerStats = await this.getCustomerStats(userId);
+        stats.customer = customerStats;
+      }
+  
+      // Статистика как исполнитель
+      if ((user.userType === UserType.EXECUTOR || user.userType === UserType.BOTH) && user.executorProfile) {
+        const executorStats = await this.getExecutorStats(user.executorProfile.id);
+        stats.executor = executorStats;
+      }
+  
+      return stats;
+    }
+  
+    private async getCustomerStats(customerId: number) {
+      // Общее количество заказов
+      const totalOrders = await this.orderRepository.count({ where: { customerId } });
+      
+      // Активные заказы
+      const activeOrders = await this.orderRepository.count({ 
+        where: { 
+          customerId, 
+          status: In([OrderStatus.OPEN, OrderStatus.IN_PROGRESS, OrderStatus.WAITING_CONFIRMATION])
+        } 
+      });
+  
+      // Завершенные заказы
+      const completedOrders = await this.orderRepository.count({ 
+        where: { customerId, status: OrderStatus.COMPLETED } 
+      });
+  
+      // Отмененные заказы
+      const cancelledOrders = await this.orderRepository.count({ 
+        where: { customerId, status: OrderStatus.CANCELLED } 
+      });
+  
+      // Общая потраченная сумма
+      const totalSpentResult = await this.orderRepository
+        .createQueryBuilder('order')
+        .select('SUM(order.agreedPrice)', 'total')
+        .where('order.customerId = :customerId', { customerId })
+        .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+        .getRawOne();
+  
+      const totalSpent = Number(totalSpentResult?.total) || 0;
+  
+      // Средний рейтинг исполнителей
+      const averageRatingResult = await this.orderRepository
+        .createQueryBuilder('order')
+        .select('AVG(order.customerRating)', 'avgRating')
+        .where('order.customerId = :customerId', { customerId })
+        .andWhere('order.customerRating IS NOT NULL')
+        .getRawOne();
+  
+      const averageRating = Number(averageRatingResult?.avgRating) || 0;
+  
+      return {
+        totalOrders,
+        activeOrders,
+        completedOrders,
+        cancelledOrders,
+        totalSpent,
+        averageRating: Math.round(averageRating * 10) / 10, // Округляем до 1 знака
+      };
+    }
+  
+    private async getExecutorStats(executorId: number) {
+      // Общее количество заявок
+      const totalApplications = await this.applicationRepository.count({ where: { executorId } });
+      
+      // Принятые заявки
+      const acceptedApplications = await this.applicationRepository.count({ 
+        where: { executorId, status: ApplicationStatus.ACCEPTED } 
+      });
+  
+      // Завершенные заказы через заявки
+      const completedOrdersResult = await this.applicationRepository
+        .createQueryBuilder('app')
+        .leftJoin('app.order', 'order')
+        .where('app.executorId = :executorId', { executorId })
+        .andWhere('app.status = :status', { status: ApplicationStatus.ACCEPTED })
+        .andWhere('order.status = :orderStatus', { orderStatus: OrderStatus.COMPLETED })
+        .getCount();
+  
+      // Общий заработок
+      const totalEarnedResult = await this.applicationRepository
+        .createQueryBuilder('app')
+        .leftJoin('app.order', 'order')
+        .select('SUM(order.agreedPrice)', 'total')
+        .where('app.executorId = :executorId', { executorId })
+        .andWhere('app.status = :status', { status: ApplicationStatus.ACCEPTED })
+        .andWhere('order.status = :orderStatus', { orderStatus: OrderStatus.COMPLETED })
+        .getRawOne();
+  
+      const totalEarned = Number(totalEarnedResult?.total) || 0;
+  
+      // Средний рейтинг от заказчиков
+      const averageRatingResult = await this.applicationRepository
+        .createQueryBuilder('app')
+        .leftJoin('app.order', 'order')
+        .select('AVG(order.executorRating)', 'avgRating')
+        .where('app.executorId = :executorId', { executorId })
+        .andWhere('order.executorRating IS NOT NULL')
+        .getRawOne();
+  
+      const averageRating = Number(averageRatingResult?.avgRating) || 0;
+  
+      // Коэффициент отклика (процент принятых заявок)
+      const responseRate = totalApplications > 0 ? (acceptedApplications / totalApplications) * 100 : 0;
+  
+      return {
+        totalApplications,
+        acceptedApplications,
+        completedOrders: completedOrdersResult,
+        totalEarned,
+        averageRating: Math.round(averageRating * 10) / 10,
+        responseRate: Math.round(responseRate * 10) / 10,
+      };
+    }
+  
+    async getRecommendedOrders(executorUserId: number, limit: number = 10): Promise<Order[]> {
+      const executor = await this.executorRepository.findOne({ 
+        where: { userId: executorUserId },
+        relations: ['user']
+      });
+  
+      if (!executor) {
+        throw new NotFoundException('Профиль исполнителя не найден');
+      }
+  
+      const queryBuilder = this.orderRepository.createQueryBuilder('order')
+        .leftJoinAndSelect('order.customer', 'customer')
+        .leftJoinAndSelect('order.category', 'category')
+        .where('order.status = :status', { status: OrderStatus.OPEN })
+        .andWhere('order.isPublished = :published', { published: true })
+        .andWhere('order.customerId != :customerId', { customerId: executorUserId }); // Не свои заказы
+  
+      // 1. ГЕОЛОКАЦИОННАЯ ФИЛЬТРАЦИЯ
+      if (executor.locationLat && executor.locationLng) {
+        const radius = executor.workRadiusKm || 10;
+        queryBuilder.andWhere(
+          `(
+            6371 * acos(
+              cos(radians(:lat)) * cos(radians(order.locationLat)) *
+              cos(radians(order.locationLng) - radians(:lng)) +
+              sin(radians(:lat)) * sin(radians(order.locationLat))
+            )
+          ) <= :radius`,
+          { lat: executor.locationLat, lng: executor.locationLng, radius }
+        );
+      }
+  
+      // 2. ИСКЛЮЧАЕМ ЗАКАЗЫ, НА КОТОРЫЕ УЖЕ ПОДАНА ЗАЯВКА
+      const existingApplications = await this.applicationRepository.find({
+        where: { executorId: executor.id },
+        select: ['orderId']
+      });
+      
+      if (existingApplications.length > 0) {
+        const appliedOrderIds = existingApplications.map(app => app.orderId);
+        queryBuilder.andWhere('order.id NOT IN (:...appliedOrderIds)', { appliedOrderIds });
+      }
+  
+      // 3. ПРИОРИТЕТ ПО КАТЕГОРИЯМ (на основе прошлого опыта)
+      const executorCategories = await this.getExecutorPreferredCategories(executor.id);
+      if (executorCategories.length > 0) {
+        // Добавляем весовой коэффициент для предпочитаемых категорий
+        queryBuilder.addSelect(
+          `CASE WHEN order.categoryId IN (${executorCategories.join(',')}) THEN 10 ELSE 1 END`,
+          'category_priority'
+        );
+      }
+  
+      // 4. ПРИОРИТЕТ ПО СРОЧНОСТИ И БЮДЖЕТУ
+      queryBuilder.addSelect(
+        `CASE 
+          WHEN order.urgency = 'urgent' THEN 20
+          WHEN order.urgency = 'high' THEN 15
+          WHEN order.urgency = 'medium' THEN 10
+          ELSE 5
+        END +
+        CASE 
+          WHEN order.budgetFrom >= 500000 THEN 10
+          WHEN order.budgetFrom >= 200000 THEN 5
+          ELSE 1
+        END`,
+        'urgency_budget_priority'
+      );
+  
+      // 5. СОРТИРОВКА ПО ПРИОРИТЕТАМ
+      queryBuilder
+        .orderBy('urgency_budget_priority', 'DESC')
+        .addOrderBy('order.createdAt', 'DESC')
+        .limit(limit);
+  
+      return queryBuilder.getMany();
+    }
+  
+    private async getExecutorPreferredCategories(executorId: number): Promise<number[]> {
+      // Анализируем историю заявок исполнителя и находим самые частые категории
+      const result = await this.applicationRepository
+        .createQueryBuilder('app')
+        .leftJoin('app.order', 'order')
+        .select('order.categoryId', 'categoryId')
+        .addSelect('COUNT(*)', 'count')
+        .where('app.executorId = :executorId', { executorId })
+        .groupBy('order.categoryId')
+        .orderBy('count', 'DESC')
+        .limit(5) // Топ 5 категорий
+        .getRawMany();
+  
+      return result.map(r => parseInt(r.categoryId)).filter(id => !isNaN(id));
+    }
+  
+    async getNearbyOrders(lat: number, lng: number, radius: number = 10, limit: number = 20): Promise<Order[]> {
+      return this.orderRepository.createQueryBuilder('order')
+        .leftJoinAndSelect('order.customer', 'customer')
+        .leftJoinAndSelect('order.category', 'category')
+        .where('order.status = :status', { status: OrderStatus.OPEN })
+        .andWhere('order.isPublished = :published', { published: true })
+        .andWhere('order.locationLat IS NOT NULL')
+        .andWhere('order.locationLng IS NOT NULL')
+        .andWhere(
+          `(
+            6371 * acos(
+              cos(radians(:lat)) * cos(radians(order.locationLat)) *
+              cos(radians(order.locationLng) - radians(:lng)) +
+              sin(radians(:lat)) * sin(radians(order.locationLat))
+            )
+          ) <= :radius`,
+          { lat, lng, radius }
+        )
+        .orderBy('order.urgency', 'DESC')
+        .addOrderBy('order.createdAt', 'DESC')
+        .limit(limit)
+        .getMany();
+    }
+  
+    async smartSearch(
+      searchQuery: string, 
+      categoryId?: number, 
+      minBudget?: number, 
+      maxBudget?: number,
+      urgency?: OrderUrgency,
+      lat?: number,
+      lng?: number,
+      radius: number = 10,
+      page: number = 1,
+      limit: number = 10
+    ): Promise<PaginatedOrders> {
+      const skip = (page - 1) * limit;
+      
+      const queryBuilder = this.orderRepository.createQueryBuilder('order')
+        .leftJoinAndSelect('order.customer', 'customer')
+        .leftJoinAndSelect('order.category', 'category')
+        .where('order.status = :status', { status: OrderStatus.OPEN })
+        .andWhere('order.isPublished = :published', { published: true });
+  
+      // Текстовый поиск по заголовку и описанию
+      if (searchQuery) {
+        queryBuilder.andWhere(
+          '(order.title ILIKE :search OR order.description ILIKE :search OR category.nameRu ILIKE :search OR category.nameUz ILIKE :search)',
+          { search: `%${searchQuery}%` }
+        );
+      }
+  
+      // Фильтр по категории
+      if (categoryId) {
+        queryBuilder.andWhere('order.categoryId = :categoryId', { categoryId });
+      }
+  
+      // Фильтр по бюджету
+      if (minBudget) {
+        queryBuilder.andWhere(
+          '(order.budgetFrom >= :minBudget OR order.budgetTo >= :minBudget)',
+          { minBudget }
+        );
+      }
+  
+      if (maxBudget) {
+        queryBuilder.andWhere(
+          '(order.budgetFrom <= :maxBudget OR order.budgetTo <= :maxBudget)',
+          { maxBudget }
+        );
+      }
+  
+      // Фильтр по срочности
+      if (urgency) {
+        queryBuilder.andWhere('order.urgency = :urgency', { urgency });
+      }
+  
+      // Геолокационный фильтр
+      if (lat && lng) {
+        queryBuilder.andWhere(
+          `(
+            6371 * acos(
+              cos(radians(:lat)) * cos(radians(order.locationLat)) *
+              cos(radians(order.locationLng) - radians(:lng)) +
+              sin(radians(:lat)) * sin(radians(order.locationLat))
+            )
+          ) <= :radius`,
+          { lat, lng, radius }
+        );
+      }
+  
+      // Сортировка по релевантности
+      queryBuilder
+        .orderBy('order.urgency', 'DESC')
+        .addOrderBy('order.createdAt', 'DESC')
+        .skip(skip)
+        .take(limit);
+  
+      const [orders, total] = await queryBuilder.getManyAndCount();
+  
+      return {
+        orders,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
     }
   }

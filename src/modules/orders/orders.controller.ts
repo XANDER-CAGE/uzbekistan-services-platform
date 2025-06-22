@@ -1,3 +1,4 @@
+// src/modules/orders/orders.controller.ts
 import {
     Controller,
     Get,
@@ -35,7 +36,7 @@ import {
   import { RolesGuard, Roles } from '../auth/guards/roles.guard';
   import { CurrentUser } from '../../common/decorators/current-user.decorator';
   import { User, UserType } from '../users/entities/user.entity';
-  import { Order, OrderStatus } from './entities/order.entity';
+  import { Order, OrderStatus, OrderUrgency } from './entities/order.entity';
   import { OrderApplication } from './entities/order-application.entity';
   import { multerPortfolioConfig } from '../../common/utils/file-upload.utils';
   
@@ -51,34 +52,34 @@ import {
     @Roles([UserType.CUSTOMER, UserType.BOTH, UserType.ADMIN, UserType.SUPER_ADMIN])
     @ApiBearerAuth()
     @ApiOperation({ 
-    summary: 'Создать заказ',
-    description: 'Создает новый заказ от имени заказчика' 
+      summary: 'Создать заказ',
+      description: 'Создает новый заказ от имени заказчика' 
     })
     @ApiResponse({ 
-    status: 201, 
-    description: 'Заказ создан',
-    type: Order
+      status: 201, 
+      description: 'Заказ создан',
+      type: Order
     })
     @ApiResponse({ status: 404, description: 'Категория не найдена' })
     @ApiResponse({ status: 400, description: 'Некорректные данные' })
     async createOrder(
-    @CurrentUser() user: User,
-    @Body() createDto: CreateOrderDto,
+      @CurrentUser() user: User,
+      @Body() createDto: CreateOrderDto,
     ) {
-    console.log('Creating order:', {
+      console.log('Creating order:', {
         userId: user.id,
         userType: user.userType,
         createDto
-    });
+      });
 
-    try {
+      try {
         const result = await this.ordersService.createOrder(user.id, createDto);
         console.log('Order created successfully:', { orderId: result.id });
         return result;
-    } catch (error) {
+      } catch (error) {
         console.error('Error creating order:', error);
         throw error;
-    }
+      }
     }
   
     @Get()
@@ -130,6 +131,75 @@ import {
     })
     async findOrders(@Query() filterDto: OrdersFilterDto) {
       return this.ordersService.findOrders(filterDto);
+    }
+
+    @Get('search/smart')
+    @ApiOperation({ 
+      summary: 'Умный поиск заказов',
+      description: 'Расширенный поиск заказов с интеллектуальной фильтрацией' 
+    })
+    @ApiQuery({ name: 'q', required: true, description: 'Поисковый запрос' })
+    @ApiQuery({ name: 'categoryId', required: false, description: 'ID категории' })
+    @ApiQuery({ name: 'minBudget', required: false, description: 'Минимальный бюджет' })
+    @ApiQuery({ name: 'maxBudget', required: false, description: 'Максимальный бюджет' })
+    @ApiQuery({ name: 'urgency', required: false, enum: OrderUrgency, description: 'Срочность' })
+    @ApiQuery({ name: 'lat', required: false, description: 'Широта' })
+    @ApiQuery({ name: 'lng', required: false, description: 'Долгота' })
+    @ApiQuery({ name: 'radius', required: false, description: 'Радиус поиска в км' })
+    @ApiQuery({ name: 'page', required: false, description: 'Номер страницы' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Количество элементов на странице' })
+    @ApiResponse({ 
+      status: 200, 
+      description: 'Результаты умного поиска получены',
+      type: Order
+    })
+    async smartSearch(
+      @Query('q') searchQuery: string,
+      @Query('categoryId') categoryId?: number,
+      @Query('minBudget') minBudget?: number,
+      @Query('maxBudget') maxBudget?: number,
+      @Query('urgency') urgency?: OrderUrgency,
+      @Query('lat') lat?: number,
+      @Query('lng') lng?: number,
+      @Query('radius') radius: number = 10,
+      @Query('page') page: number = 1,
+      @Query('limit') limit: number = 10,
+    ) {
+      return this.ordersService.smartSearch(
+        searchQuery,
+        categoryId,
+        minBudget,
+        maxBudget,
+        urgency,
+        lat,
+        lng,
+        radius,
+        page,
+        limit
+      );
+    }
+
+    @Get('nearby')
+    @ApiOperation({ 
+      summary: 'Найти заказы рядом',
+      description: 'Возвращает заказы в указанном радиусе от местоположения' 
+    })
+    @ApiQuery({ name: 'lat', required: true, description: 'Широта' })
+    @ApiQuery({ name: 'lng', required: true, description: 'Долгота' })
+    @ApiQuery({ name: 'radius', required: false, description: 'Радиус поиска в км (по умолчанию 10)' })
+    @ApiQuery({ name: 'limit', required: false, description: 'Максимальное количество заказов (по умолчанию 20)' })
+    @ApiResponse({ 
+      status: 200, 
+      description: 'Заказы рядом найдены',
+      type: [Order]
+    })
+    async findNearbyOrders(
+      @Query('lat', ParseIntPipe) lat: number,
+      @Query('lng', ParseIntPipe) lng: number,
+      @Query('radius') radius: number = 10,
+      @Query('limit') limit: number = 20,
+    ) {
+      return this.ordersService.getNearbyOrders(lat, lng, radius, limit);
     }
   
     @Get('my')
@@ -207,7 +277,8 @@ import {
     ) {
       return this.ordersService.completeOrder(user.id, id, completeDto);
     }
-  
+
+    // === ИСПРАВЛЕНО: Загрузка файлов с реальной бизнес логикой ===
     @Post(':id/attachments')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
@@ -238,15 +309,20 @@ import {
       description: 'Файлы загружены',
       schema: {
         example: {
-          message: "Загружено 3 файла",
+          id: 1,
+          title: "Ремонт кондиционера Samsung",
           attachments: [
             "/uploads/portfolio/file1.jpg",
             "/uploads/portfolio/file2.pdf",
             "/uploads/portfolio/file3.jpg"
-          ]
+          ],
+          message: "Загружено 3 файла"
         }
       }
     })
+    @ApiResponse({ status: 400, description: 'Файлы не загружены или превышен лимит' })
+    @ApiResponse({ status: 403, description: 'Нет прав для добавления файлов' })
+    @ApiResponse({ status: 404, description: 'Заказ не найден' })
     async uploadAttachments(
       @CurrentUser() user: User,
       @Param('id', ParseIntPipe) id: number,
@@ -255,13 +331,21 @@ import {
       if (!files || files.length === 0) {
         throw new BadRequestException('Файлы не загружены');
       }
-  
-      // TODO: Реализовать добавление файлов к заказу
+
+      // Проверяем количество файлов
+      if (files.length > 5) {
+        throw new BadRequestException('Максимальное количество файлов за раз: 5');
+      }
+
+      // Создаем URLs для файлов
       const attachmentUrls = files.map(file => `/uploads/portfolio/${file.filename}`);
       
+      // Добавляем файлы к заказу через сервис
+      const updatedOrder = await this.ordersService.addAttachments(id, user.id, attachmentUrls);
+      
       return {
+        ...updatedOrder,
         message: `Загружено ${files.length} файлов`,
-        attachments: attachmentUrls,
       };
     }
   
@@ -414,14 +498,13 @@ import {
       return this.ordersService.withdrawApplication(user.id, applicationId);
     }
   
-    // === СТАТИСТИКА И АНАЛИТИКА ===
-  
+    // === ИСПРАВЛЕНО: Статистика дашборда с реальной бизнес логикой ===
     @Get('stats/dashboard')
     @UseGuards(JwtAuthGuard)
     @ApiBearerAuth()
     @ApiOperation({ 
       summary: 'Получить статистику дашборда',
-      description: 'Возвращает статистику заказов для текущего пользователя' 
+      description: 'Возвращает детальную статистику заказов для текущего пользователя' 
     })
     @ApiResponse({ 
       status: 200, 
@@ -441,29 +524,24 @@ import {
             acceptedApplications: 12,
             completedOrders: 10,
             totalEarned: 1800000,
-            averageRating: 4.8
+            averageRating: 4.8,
+            responseRate: 85.5
           }
         }
       }
     })
     async getDashboardStats(@CurrentUser() user: User) {
-      // TODO: Реализовать получение статистики
-      return {
-        message: 'Статистика дашборда (в разработке)',
-        user: {
-          id: user.id,
-          type: user.userType
-        }
-      };
+      return this.ordersService.getDashboardStats(user.id);
     }
-  
+
+    // === ИСПРАВЛЕНО: Рекомендации с умным алгоритмом ===
     @Get('feed/recommended')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles([UserType.EXECUTOR, UserType.BOTH])
     @ApiBearerAuth()
     @ApiOperation({ 
       summary: 'Получить рекомендованные заказы',
-      description: 'Возвращает заказы, подходящие для текущего исполнителя' 
+      description: 'Возвращает персонализированные рекомендации заказов для исполнителя на основе геолокации, истории заявок и предпочтений' 
     })
     @ApiQuery({ name: 'limit', required: false, description: 'Количество заказов (по умолчанию 10)' })
     @ApiResponse({ 
@@ -471,22 +549,11 @@ import {
       description: 'Рекомендованные заказы получены',
       type: [Order]
     })
+    @ApiResponse({ status: 404, description: 'Профиль исполнителя не найден' })
     async getRecommendedOrders(
       @CurrentUser() user: User,
       @Query('limit') limit: number = 10,
     ) {
-      // TODO: Реализовать алгоритм рекомендаций на основе:
-      // - Местоположения исполнителя
-      // - Его специализации
-      // - Истории заказов
-      // - Рейтинга исполнителя
-      
-      const filterDto: OrdersFilterDto = {
-        page: 1,
-        limit,
-        status: OrderStatus.OPEN,
-      };
-      
-      return this.ordersService.findOrders(filterDto);
+      return this.ordersService.getRecommendedOrders(user.id, limit);
     }
   }

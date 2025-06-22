@@ -1,7 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsNumber } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsNumber, IsIn } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { OrderStatus, OrderUrgency, OrderPriceType } from '../entities/order.entity';
+
+// Enum для типов сортировки
+export enum OrderSortType {
+  NEWEST = 'newest',
+  OLDEST = 'oldest',
+  BUDGET_HIGH = 'budget_high',
+  BUDGET_LOW = 'budget_low',
+  URGENT = 'urgent',
+  POPULAR = 'popular'
+}
 
 export class OrdersFilterDto {
   @ApiProperty({ 
@@ -119,4 +129,25 @@ export class OrdersFilterDto {
   @IsOptional()
   @Type(() => Number)
   customerId?: number;
+
+  // НОВОЕ ПОЛЕ: Тип сортировки
+  @ApiProperty({ 
+    description: 'Тип сортировки',
+    enum: OrderSortType,
+    example: OrderSortType.NEWEST,
+    required: false 
+  })
+  @IsOptional()
+  @IsEnum(OrderSortType)
+  sortBy?: OrderSortType = OrderSortType.NEWEST;
+
+  // НОВОЕ ПОЛЕ: Адрес/местоположение для фильтрации
+  @ApiProperty({ 
+    description: 'Поиск по адресу/местоположению',
+    example: 'Ташкент',
+    required: false 
+  })
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

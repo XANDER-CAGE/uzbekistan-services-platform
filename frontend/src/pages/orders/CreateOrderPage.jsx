@@ -1,4 +1,3 @@
-// frontend/src/pages/orders/CreateOrderPage.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';

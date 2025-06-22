@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usersService } from '../services/users';
-import Layout from '../components/layout/Layout';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import EditProfileForm from '../components/profile/EditProfileForm';
 import ChangePasswordForm from '../components/profile/ChangePasswordForm';
@@ -299,58 +298,53 @@ const ProfilePage = () => {
   };
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Заголовок страницы */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Мой профиль</h1>
-            <p className="text-gray-600 mt-2">
-              Управляйте своим аккаунтом и настройками
-            </p>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Заголовок страницы */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Мой профиль</h1>
+          <p className="text-gray-600 mt-2">
+            Управляйте своим аккаунтом и настройками
+          </p>
+        </div>
+        {/* Заголовок профиля */}
+        <div className="mb-8">
+          <ProfileHeader />
+        </div>
+        {/* Основной контент с табами */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Боковая панель с табами */}
+          <div className="lg:col-span-1">
+            <nav className="space-y-2">
+              {tabs.map((tab) => {
+                const IconComponent = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors duration-200 ${
+                      activeTab === tab.id
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <IconComponent className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                      <div className="font-medium">{tab.name}</div>
+                      <div className="text-sm text-gray-500">{tab.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </nav>
           </div>
-
-          {/* Заголовок профиля */}
-          <div className="mb-8">
-            <ProfileHeader />
-          </div>
-
-          {/* Основной контент с табами */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            {/* Боковая панель с табами */}
-            <div className="lg:col-span-1">
-              <nav className="space-y-2">
-                {tabs.map((tab) => {
-                  const IconComponent = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-colors duration-200 ${
-                        activeTab === tab.id
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      <IconComponent className="w-5 h-5 flex-shrink-0" />
-                      <div>
-                        <div className="font-medium">{tab.name}</div>
-                        <div className="text-sm text-gray-500">{tab.description}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-
-            {/* Основной контент */}
-            <div className="lg:col-span-3">
-              {renderTabContent()}
-            </div>
+          {/* Основной контент */}
+          <div className="lg:col-span-3">
+            {renderTabContent()}
           </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 
