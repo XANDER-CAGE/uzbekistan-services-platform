@@ -54,14 +54,21 @@ const CreateOrderPage = () => {
       navigate('/login');
       return;
     }
-
-    if (user.userType !== 'customer' && user.userType !== 'both') {
+  
+    // ИСПРАВЛЕНИЕ: Добавляем поддержку администраторов
+    const hasAccess = user.userType === 'customer' || 
+                     user.userType === 'both' || 
+                     user.userType === 'admin' ||
+                     user.role === 'admin' ||
+                     user.role === 'super_admin';
+  
+    if (!hasAccess) {
       console.log('User type not allowed:', user.userType);
       toast.error('У вас нет прав для создания заказов');
       navigate('/');
       return;
     }
-
+  
     loadCategories();
   }, [user, navigate]);
 

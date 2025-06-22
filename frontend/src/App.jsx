@@ -60,6 +60,7 @@ const RoleProtectedRoute = ({ children, allowedRoles }) => {
     loading,
     user,
     userType: user?.userType,
+    userRole: user?.role,
     allowedRoles
   });
 
@@ -81,12 +82,17 @@ const RoleProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // ИСПРАВЛЕНИЕ: Проверяем роли правильно
+  // ИСПРАВЛЕНИЕ: Проверяем роли правильно - добавляем поддержку администраторов
   if (allowedRoles && allowedRoles.length > 0) {
-    const hasAccess = allowedRoles.includes(user.userType) || user.userType === 'both';
-    
+    const hasAccess = allowedRoles.includes(user.userType) || 
+                     user.userType === 'both' ||
+                     user.userType === 'admin' ||
+                     user.role === 'admin' ||
+                     user.role === 'super_admin';
+
     console.log('Role check:', {
       userType: user.userType,
+      userRole: user.role,
       allowedRoles,
       hasAccess
     });

@@ -51,8 +51,13 @@ export class RolesGuard implements CanActivate {
 
     // Если указаны обычные роли, проверяем их
     if (requiredRoles && requiredRoles.length > 0) {
-      // ИСПРАВЛЕНИЕ: Пользователь с типом BOTH может делать все
-      const hasAccess = requiredRoles.includes(user.userType) || user.userType === UserType.BOTH;
+      // ИСПРАВЛЕНИЕ: Администраторы и пользователи с типом BOTH могут делать все
+      const hasAccess = requiredRoles.includes(user.userType) || 
+                       user.userType === UserType.BOTH ||
+                       user.userType === UserType.ADMIN ||
+                       user.role === UserRole.ADMIN ||
+                       user.role === UserRole.SUPER_ADMIN;
+      
       console.log('RolesGuard: User type check result:', hasAccess);
       return hasAccess;
     }

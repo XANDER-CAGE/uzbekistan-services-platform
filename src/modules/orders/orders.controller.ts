@@ -48,7 +48,7 @@ import {
   
     @Post()
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles([UserType.CUSTOMER, UserType.BOTH])
+    @Roles([UserType.CUSTOMER, UserType.BOTH, UserType.ADMIN, UserType.SUPER_ADMIN])
     @ApiBearerAuth()
     @ApiOperation({ 
     summary: 'Создать заказ',

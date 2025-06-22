@@ -15,7 +15,9 @@ export enum UserType {
   CUSTOMER = 'customer',   // Заказчик
   EXECUTOR = 'executor',   // Исполнитель
   BOTH = 'both',          // И заказчик, и исполнитель
-  ADMIN = 'admin'         // Администратор
+  ADMIN = 'admin',         // Администратор
+  SUPER_ADMIN = 'super_admin' // Супер администратор
+
 }
 
 // Роли в системе
