@@ -12,7 +12,9 @@ import {
   FunnelIcon,
   PlusIcon,
   AdjustmentsHorizontalIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowsUpDownIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -25,6 +27,7 @@ const OrdersPage = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
   
   // Состояние фильтров
   const [filters, setFilters] = useState({
@@ -36,6 +39,7 @@ const OrdersPage = () => {
     minBudget: searchParams.get('minBudget') || '',
     maxBudget: searchParams.get('maxBudget') || '',
     location: searchParams.get('location') || '',
+    sortBy: searchParams.get('sortBy') || 'newest',
   });
 
   // Пагинация
@@ -46,12 +50,21 @@ const OrdersPage = () => {
     totalPages: 0
   });
 
+  // Статистика
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    openOrders: 0,
+    averageBudget: 0,
+    popularCategories: []
+  });
+
   useEffect(() => {
     loadCategories();
   }, []);
 
   useEffect(() => {
     loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, pagination.page]);
 
   const loadCategories = async () => {
@@ -85,6 +98,13 @@ const OrdersPage = () => {
         ...prev,
         total: response.total || 0,
         totalPages: response.totalPages || 0
+      }));
+
+      // Обновляем статистику
+      setStats(prev => ({
+        ...prev,
+        totalOrders: response.total || 0,
+        openOrders: response.orders?.filter(o => o.status === 'open').length || 0
       }));
     } catch (error) {
       console.error('Error loading orders:', error);
@@ -146,6 +166,7 @@ const OrdersPage = () => {
       minBudget: '',
       maxBudget: '',
       location: '',
+      sortBy: 'newest',
     };
     setFilters(clearedFilters);
     setSearchParams({});
@@ -174,16 +195,25 @@ const OrdersPage = () => {
     { value: 'negotiable', label: 'Договорная' },
   ];
 
-  const activeFiltersCount = Object.values(filters).filter(v => v && v !== 'open').length;
+  const sortOptions = [
+    { value: 'newest', label: 'Сначала новые' },
+    { value: 'oldest', label: 'Сначала старые' },
+    { value: 'budget_high', label: 'Дорогие сверху' },
+    { value: 'budget_low', label: 'Дешевые сверху' },
+    { value: 'urgent', label: 'Срочные сверху' },
+    { value: 'popular', label: 'Популярные' },
+  ];
+
+  const activeFiltersCount = Object.values(filters).filter(v => v && v !== 'open' && v !== 'newest').length;
 
   return (
     <Layout>
       <div className="min-h-screen bg-gray-50">
-        {/* Заголовок */}
+        {/* Заголовок и статистика */}
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div>
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex-1">
                 <h1 className="text-3xl font-bold text-gray-900">
                   Поиск заказов
                 </h1>
@@ -193,12 +223,24 @@ const OrdersPage = () => {
                     : 'Найдите подходящие заказы для выполнения'
                   }
                 </p>
+                
+                {/* Статистика */}
+                <div className="flex flex-wrap items-center gap-6 mt-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-1">
+                    <EyeIcon className="w-4 h-4" />
+                    <span>{stats.totalOrders} заказов найдено</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span>{stats.openOrders} открытых</span>
+                  </div>
+                </div>
               </div>
               
               {user && (user.userType === 'customer' || user.userType === 'both') && (
                 <Button
                   onClick={() => navigate('/orders/create')}
-                  className="mt-4 sm:mt-0"
+                  className="mt-4 lg:mt-0"
                 >
                   <PlusIcon className="w-4 h-4 mr-2" />
                   Создать заказ
@@ -213,7 +255,7 @@ const OrdersPage = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
             <form onSubmit={handleSearch} className="space-y-4">
               {/* Основной поиск */}
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col lg:flex-row gap-4">
                 <div className="flex-1 relative">
                   <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -221,7 +263,7 @@ const OrdersPage = () => {
                     placeholder="Поиск заказов..."
                     value={filters.search}
                     onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
                 
@@ -232,14 +274,46 @@ const OrdersPage = () => {
                     placeholder="Местоположение"
                     value={filters.location}
                     onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                    className="w-full sm:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="w-full lg:w-64 pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
 
                 <div className="flex gap-2">
-                  <Button type="submit">
-                    Найти
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Поиск...' : 'Найти'}
                   </Button>
+                  
+                  <div className="relative">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setSortMenuOpen(!sortMenuOpen)}
+                    >
+                      <ArrowsUpDownIcon className="w-4 h-4 mr-2" />
+                      Сортировка
+                    </Button>
+                    
+                    {sortMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                        {sortOptions.map(option => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => {
+                              handleFilterChange('sortBy', option.value);
+                              setSortMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${
+                              filters.sortBy === option.value ? 'bg-primary-50 text-primary-600' : ''
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <Button
                     type="button"
                     variant="outline"
@@ -390,7 +464,7 @@ const OrdersPage = () => {
 
           {/* Список заказов */}
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {Array.from({ length: 6 }).map((_, index) => (
                 <div key={index} className="animate-pulse">
                   <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -407,7 +481,7 @@ const OrdersPage = () => {
             </div>
           ) : orders.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
                 {orders.map((order) => (
                   <OrderCard
                     key={order.id}
