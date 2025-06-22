@@ -106,6 +106,27 @@ const MyOrdersPage = () => {
     }
   };
 
+  const handleWithdrawApplication = async (applicationId) => {
+    if (!window.confirm('Вы уверены, что хотите отозвать заявку?')) {
+      return;
+    }
+  
+    try {
+      await ordersService.withdrawMyApplication(applicationId);
+      toast.success('Заявка отозвана');
+      loadMyApplications(); // Перезагружаем список
+    } catch (error) {
+      console.error('Error withdrawing application:', error);
+      
+      if (error.response?.status === 400) {
+        toast.error('Можно отозвать только ожидающие заявки');
+      } else {
+        toast.error('Ошибка при отзыве заявки');
+      }
+    }
+  };
+  
+
   const handleOrderClick = (order) => {
     navigate(`/orders/${order.id}`);
   };
@@ -480,13 +501,28 @@ const MyOrdersPage = () => {
                         </div>
                       </div>
                       
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOrderClick(application.order)}
-                      >
-                        Подробнее
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOrderClick(application.order)}
+                        >
+                          Подробнее
+                        </Button>
+                        
+                        {/* ДОБАВИТЬ: Кнопка отзыва заявки */}
+                        {application.status === 'pending' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleWithdrawApplication(application.id)}
+                            className="text-red-600 hover:text-red-700 hover:border-red-300"
+                          >
+                            Отозвать
+                          </Button>
+                        )}
+                      </div>
+                      
                     </div>
                   </CardContent>
                 </Card>

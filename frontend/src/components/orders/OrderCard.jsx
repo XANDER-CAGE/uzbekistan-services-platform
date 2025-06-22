@@ -42,7 +42,7 @@ const OrderCard = ({ order, onOrderClick, onApplyClick, showApplyButton = false 
   const getUrgencyColor = (urgency) => {
     const colors = {
       low: 'bg-green-50 text-green-700 border-green-200',
-      medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+      medium: 'bg-blue-50 text-blue-700 border-blue-200',
       high: 'bg-orange-50 text-orange-700 border-orange-200',
       urgent: 'bg-red-50 text-red-700 border-red-200'
     };
@@ -52,7 +52,7 @@ const OrderCard = ({ order, onOrderClick, onApplyClick, showApplyButton = false 
   const getUrgencyLabel = (urgency) => {
     const labels = {
       low: 'Не срочно',
-      medium: 'Обычная',
+      medium: 'Обычная', // ИСПРАВЛЕНО: было 'Обычная'
       high: 'Срочно',
       urgent: 'Очень срочно'
     };

@@ -94,6 +94,31 @@ const OrderDetailPage = () => {
     }
   };
 
+  const handleFileUpload = async (files) => {
+    if (!files || files.length === 0) return;
+  
+    try {
+      setActionLoading(true);
+      
+      const result = await ordersService.uploadAttachments(id, Array.from(files));
+      toast.success(result.message || 'Файлы загружены');
+      
+      // Перезагружаем заказ
+      loadOrder();
+    } catch (error) {
+      console.error('File upload error:', error);
+      
+      if (error.response?.status === 400) {
+        toast.error('Ошибка загрузки файлов. Проверьте формат и размер.');
+      } else {
+        toast.error('Ошибка загрузки файлов');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+  
+
   const getStatusColor = (status) => {
     const colors = {
       draft: 'bg-gray-100 text-gray-800',
@@ -481,6 +506,23 @@ const OrderDetailPage = () => {
                     <ChatBubbleLeftRightIcon className="w-4 h-4 mr-2" />
                     Написать сообщение
                   </Button>
+                  {isOwner && order.status !== 'completed' && order.status !== 'cancelled' && (
+                    <div className="mt-3">
+                      <label className="w-full">
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*,.pdf,.doc,.docx"
+                          onChange={(e) => handleFileUpload(e.target.files)}
+                          className="hidden"
+                        />
+                        <span className="w-full inline-flex items-center justify-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer">
+                          <PaperClipIcon className="w-4 h-4 mr-2" />
+                          Добавить файлы
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

@@ -97,6 +97,16 @@ const Header = () => {
                           <UserCircleIcon className="w-4 h-4 mr-3" />
                           Мой профиль
                         </Link>
+                        {(user?.userType === 'executor' || user?.userType === 'both') && (
+                        <Link
+                          to="/executor/profile"
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          <span className="w-4 h-4 mr-3">🔧</span>
+                          Профиль исполнителя
+                        </Link>
+                      )}
                         <Link
                           to="/my-orders"
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

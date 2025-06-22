@@ -93,7 +93,7 @@ const CreateOrderPage = () => {
       toast.error('Выберите категорию услуги');
       return;
     }
-
+  
     console.log('Submitting order:', { ...data, categoryId: selectedCategory.id });
     setLoading(true);
     
@@ -103,8 +103,20 @@ const CreateOrderPage = () => {
         categoryId: selectedCategory.id,
         budgetFrom: data.budgetFrom ? Number(data.budgetFrom) : undefined,
         budgetTo: data.budgetTo ? Number(data.budgetTo) : undefined,
+        // ИСПРАВЛЕНИЕ: Добавляем обработку дат
+        preferredStartDate: data.preferredStartDate || undefined,
+        deadline: data.deadline || undefined,
       };
-
+  
+      // ИСПРАВЛЕНИЕ: Убираем пустые поля
+      Object.keys(orderData).forEach(key => {
+        if (orderData[key] === undefined || orderData[key] === '') {
+          delete orderData[key];
+        }
+      });
+  
+      console.log('Final order data:', orderData);
+  
       const response = await ordersService.createOrder(orderData);
       console.log('Order created successfully:', response);
       
@@ -112,12 +124,21 @@ const CreateOrderPage = () => {
       navigate(`/orders/${response.id}`);
     } catch (error) {
       console.error('Create order error:', error);
-      const message = error.response?.data?.message || 'Ошибка при создании заказа';
-      toast.error(message);
+      
+      // ИСПРАВЛЕНИЕ: Улучшенная обработка ошибок
+      if (error.response?.status === 404) {
+        toast.error('Категория не найдена');
+      } else if (error.response?.status === 400) {
+        const message = error.response?.data?.message || 'Проверьте корректность данных';
+        toast.error(message);
+      } else {
+        toast.error('Ошибка при создании заказа');
+      }
     } finally {
       setLoading(false);
     }
   };
+  
 
   const handleCategorySelect = (category) => {
     console.log('Category selected:', category);

@@ -20,6 +20,10 @@ import OrderDetailPage from './pages/orders/OrderDetailPage';
 import ApplyOrderPage from './pages/orders/ApplyOrderPage';
 import MyOrdersPage from './pages/orders/MyOrdersPage';
 
+import ExecutorsSearchPage from './pages/ExecutorsSearchPage';
+import ExecutorProfilePage from './pages/ExecutorProfilePage';
+import ExecutorServicesPage from './pages/ExecutorServicesPage';
+
 // Create a query client
 const queryClient = new QueryClient({
   defaultOptions: {

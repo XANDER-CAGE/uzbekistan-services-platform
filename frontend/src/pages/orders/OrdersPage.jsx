@@ -113,6 +113,52 @@ const OrdersPage = () => {
     }
   };
 
+  const handleSmartSearch = async () => {
+    if (!filters.search.trim()) {
+      toast.error('Введите поисковый запрос');
+      return;
+    }
+  
+    try {
+      setLoading(true);
+      
+      const params = {
+        q: filters.search,
+        categoryId: filters.categoryId || undefined,
+        minBudget: filters.minBudget || undefined,
+        maxBudget: filters.maxBudget || undefined,
+        urgency: filters.urgency || undefined,
+        page: pagination.page,
+        limit: pagination.limit,
+      };
+  
+      // Убираем пустые параметры
+      Object.keys(params).forEach(key => {
+        if (!params[key]) delete params[key];
+      });
+  
+      const response = await ordersService.smartSearch(params);
+      
+      setOrders(response.orders || []);
+      setPagination(prev => ({
+        ...prev,
+        total: response.total || 0,
+        totalPages: response.totalPages || 0
+      }));
+  
+      setStats(prev => ({
+        ...prev,
+        totalOrders: response.total || 0,
+        openOrders: response.orders?.filter(o => o.status === 'open').length || 0
+      }));
+    } catch (error) {
+      console.error('Smart search error:', error);
+      toast.error('Ошибка умного поиска');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
@@ -131,7 +177,13 @@ const OrdersPage = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    loadOrders();
+    
+    // Если есть поисковый запрос, используем умный поиск
+    if (filters.search.trim()) {
+      handleSmartSearch();
+    } else {
+      loadOrders();
+    }
   };
 
   const handlePageChange = (newPage) => {

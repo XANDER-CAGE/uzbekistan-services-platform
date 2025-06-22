@@ -86,11 +86,48 @@ export const ordersService = {
     return response.data;
   },
 
-  // Отозвать заявку
-  async withdrawApplication(applicationId) {
+// Умный поиск заказов
+async smartSearch(params) {
+    const response = await api.get('/orders/search/smart', { params });
+    return response.data;
+  },
+
+  // Поиск заказов рядом
+  async getNearbyOrders(lat, lng, radius = 10, limit = 20) {
+    const response = await api.get('/orders/nearby', {
+      params: { lat, lng, radius, limit }
+    });
+    return response.data;
+  },
+
+  // === ДОПОЛНИТЕЛЬНЫЕ МЕТОДЫ ===
+
+  // Отозвать заявку (исправленный метод)
+  async withdrawMyApplication(applicationId) {
     const response = await api.post(`/orders/applications/${applicationId}/withdraw`);
     return response.data;
   },
+
+  // Получить детальную заявку
+  async getApplicationById(applicationId) {
+    const response = await api.get(`/orders/applications/${applicationId}`);
+    return response.data;
+  },
+
+  async uploadAttachments(orderId, files) {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('attachments', file);
+    });
+    
+    const response = await api.post(`/orders/${orderId}/attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
 
   // === СТАТИСТИКА ===
 

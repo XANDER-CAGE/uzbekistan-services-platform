@@ -105,21 +105,43 @@ const ApplyOrderPage = () => {
         proposedPrice: data.proposedPrice ? Number(data.proposedPrice) : undefined,
         proposedDurationDays: data.proposedDurationDays ? Number(data.proposedDurationDays) : undefined,
         message: data.message,
-        availableFrom: data.availableFrom ? new Date(data.availableFrom).toISOString() : undefined,
+        availableFrom: data.availableFrom || undefined,
       };
-
+  
+      // ИСПРАВЛЕНИЕ: Убираем пустые поля
+      Object.keys(applicationData).forEach(key => {
+        if (applicationData[key] === undefined || applicationData[key] === '') {
+          delete applicationData[key];
+        }
+      });
+  
+      console.log('Submitting application:', applicationData);
+  
       await ordersService.createApplication(id, applicationData);
       
       toast.success('Заявка успешно подана!');
       navigate(`/orders/${id}`);
     } catch (error) {
       console.error('Submit application error:', error);
-      const message = error.response?.data?.message || 'Ошибка при подаче заявки';
-      toast.error(message);
+      
+      // ИСПРАВЛЕНИЕ: Улучшенная обработка ошибок
+      if (error.response?.status === 404) {
+        toast.error('Заказ не найден');
+      } else if (error.response?.status === 400) {
+        const message = error.response?.data?.message || 'Заказ не принимает заявки';
+        toast.error(message);
+      } else if (error.response?.status === 409) {
+        toast.error('Вы уже подавали заявку на этот заказ');
+      } else if (error.response?.status === 403) {
+        toast.error('У вас нет прав для подачи заявки');
+      } else {
+        toast.error('Ошибка при подаче заявки');
+      }
     } finally {
       setSubmitting(false);
     }
   };
+  
 
   const formatBudget = () => {
     if (!order) return '';
