@@ -30,7 +30,7 @@ const AdminLayout = ({ children }) => {
   };
 
   // Проверяем права доступа к админке
-  if (!user || user.userType !== 'admin') {
+  if (!user || user.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
