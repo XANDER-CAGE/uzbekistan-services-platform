@@ -6,13 +6,13 @@ import { categoriesService } from '../../services/categories';
 import Layout from '../../components/layout/Layout';
 import OrderCard from '../../components/orders/OrderCard';
 import Button from '../../components/ui/Button';
-import Input from '../../components/ui/Input';
 import { 
   MagnifyingGlassIcon,
   MapPinIcon,
   FunnelIcon,
   PlusIcon,
-  AdjustmentsHorizontalIcon
+  AdjustmentsHorizontalIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
@@ -106,6 +106,7 @@ const OrdersPage = () => {
         newSearchParams.set(key, newFilters[key]);
       }
     });
+    newSearchParams.set('page', '1');
     setSearchParams(newSearchParams);
   };
 
@@ -116,6 +117,9 @@ const OrdersPage = () => {
 
   const handlePageChange = (newPage) => {
     setPagination(prev => ({ ...prev, page: newPage }));
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.set('page', newPage.toString());
+    setSearchParams(newSearchParams);
     window.scrollTo(0, 0);
   };
 
@@ -145,6 +149,7 @@ const OrdersPage = () => {
     };
     setFilters(clearedFilters);
     setSearchParams({});
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const statusOptions = [
@@ -169,6 +174,8 @@ const OrdersPage = () => {
     { value: 'negotiable', label: 'Договорная' },
   ];
 
+  const activeFiltersCount = Object.values(filters).filter(v => v && v !== 'open').length;
+
   return (
     <Layout>
       <div className="min-h-screen bg-gray-50">
@@ -181,7 +188,10 @@ const OrdersPage = () => {
                   Поиск заказов
                 </h1>
                 <p className="text-gray-600 mt-2">
-                  Найдите подходящие заказы для выполнения
+                  {user?.userType === 'customer' || user?.userType === 'both' 
+                    ? 'Найдите исполнителей для ваших задач или посмотрите активные заказы'
+                    : 'Найдите подходящие заказы для выполнения'
+                  }
                 </p>
               </div>
               
@@ -234,9 +244,15 @@ const OrdersPage = () => {
                     type="button"
                     variant="outline"
                     onClick={() => setFiltersOpen(!filtersOpen)}
+                    className="relative"
                   >
                     <AdjustmentsHorizontalIcon className="w-4 h-4 mr-2" />
                     Фильтры
+                    {activeFiltersCount > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-primary-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                        {activeFiltersCount}
+                      </span>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -346,6 +362,7 @@ const OrdersPage = () => {
                       onClick={clearFilters}
                       className="flex-1"
                     >
+                      <XMarkIcon className="w-4 h-4 mr-2" />
                       Очистить фильтры
                     </Button>
                   </div>
@@ -363,6 +380,12 @@ const OrdersPage = () => {
                 `Найдено ${pagination.total} заказов`
               )}
             </div>
+            
+            {pagination.total > 0 && (
+              <div className="text-sm text-gray-500">
+                Страница {pagination.page} из {pagination.totalPages}
+              </div>
+            )}
           </div>
 
           {/* Список заказов */}
@@ -391,7 +414,7 @@ const OrdersPage = () => {
                     order={order}
                     onOrderClick={handleOrderClick}
                     onApplyClick={handleApplyClick}
-                    showApplyButton={user && user.userType !== 'customer'}
+                    showApplyButton={user && (user.userType === 'executor' || user.userType === 'both')}
                   />
                 ))}
               </div>
