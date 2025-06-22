@@ -1,3 +1,4 @@
+// src/modules/admin/admin.controller.ts
 import {
     Controller,
     Get,
@@ -23,9 +24,9 @@ import {
   } from '@nestjs/swagger';
   import { AdminService } from './admin.service';
   import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-  import { RolesGuard, Roles } from '../auth/guards/roles.guard';
+  import { AdminGuard } from '../auth/guards/admin.guard'; // Новый guard
   import { CurrentUser } from '../../common/decorators/current-user.decorator';
-  import { User, UserType } from '../users/entities/user.entity';
+  import { User } from '../users/entities/user.entity';
   import { 
     CreateComplaintDto,
     UpdateComplaintDto,
@@ -35,66 +36,18 @@ import {
     ComplaintsFilterDto,
     DashboardStatsDto
   } from './dto/admin-dashboard.dto';
-  import { UserComplaint } from './entities/user-complaint.entity';
-  import { AdminReport } from './entities/admin-report.entity';
-  import { SystemSettings } from './entities/system-settings.entity';
   
   @ApiTags('Администрирование')
   @Controller('admin')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles([UserType.BOTH]) // Пока используем BOTH как админскую роль
+  @UseGuards(JwtAuthGuard, AdminGuard) // Используем AdminGuard вместо RolesGuard
   @ApiBearerAuth()
   export class AdminController {
     constructor(private readonly adminService: AdminService) {}
-  
-    // === ДАШБОРД И СТАТИСТИКА ===
   
     @Get('dashboard')
     @ApiOperation({ 
       summary: 'Получить статистику дашборда',
       description: 'Возвращает основную статистику для админ панели' 
-    })
-    @ApiResponse({ 
-      status: 200, 
-      description: 'Статистика получена',
-      schema: {
-        example: {
-          users: {
-            total: 1247,
-            newToday: 15,
-            newThisWeek: 89,
-            newThisMonth: 324,
-            verified: 1180,
-            blocked: 12
-          },
-          orders: {
-            total: 3856,
-            active: 124,
-            completed: 3421,
-            cancelled: 311,
-            newToday: 28,
-            revenue: 45280000
-          },
-          executors: {
-            total: 342,
-            verified: 298,
-            active: 267,
-            newApplications: 18
-          },
-          complaints: {
-            total: 89,
-            pending: 12,
-            inReview: 8,
-            resolved: 69
-          },
-          revenue: {
-            total: 45280000,
-            thisMonth: 3850000,
-            commission: 4528000,
-            growth: 18.5
-          }
-        }
-      }
     })
     async getDashboardStats(@Query() filterDto: DashboardStatsDto) {
       return this.adminService.getDashboardStats(filterDto);
@@ -164,7 +117,6 @@ import {
       summary: 'Получить список жалоб',
       description: 'Возвращает список жалоб с фильтрацией' 
     })
-    @ApiResponse({ status: 200, description: 'Список жалоб', type: [UserComplaint] })
     async getComplaints(@Query() filterDto: ComplaintsFilterDto) {
       return this.adminService.getComplaints(filterDto);
     }
@@ -214,7 +166,6 @@ import {
       summary: 'Получить список отчетов',
       description: 'Возвращает список созданных отчетов' 
     })
-    @ApiResponse({ status: 200, description: 'Список отчетов', type: [AdminReport] })
     async getReports(@Query() filterDto: any) {
       return this.adminService.getReports(filterDto);
     }
@@ -224,7 +175,6 @@ import {
       summary: 'Создать новый отчет',
       description: 'Создает новый отчет для генерации' 
     })
-    @ApiResponse({ status: 201, description: 'Отчет создан', type: AdminReport })
     async createReport(
       @Body() createDto: CreateReportDto,
       @CurrentUser() admin: User
@@ -304,55 +254,6 @@ import {
     })
     async createSetting(@Body() createDto: CreateSettingDto) {
       return this.adminService.createSetting(createDto);
-    }
-  
-    // === УПРАВЛЕНИЕ ЗАКАЗАМИ ===
-  
-    @Get('orders')
-    @ApiOperation({ 
-      summary: 'Получить заказы для администрирования',
-      description: 'Расширенный список заказов с административной информацией' 
-    })
-    async getOrders(@Query() filterDto: any) {
-      return this.adminService.getOrders(filterDto);
-    }
-  
-    @Patch('orders/:id/resolve-dispute')
-    @ApiOperation({ 
-      summary: 'Разрешить спор по заказу',
-      description: 'Администратор принимает решение по спорному заказу' 
-    })
-    @ApiParam({ name: 'id', description: 'ID заказа' })
-    async resolveDispute(
-      @Param('id', ParseIntPipe) id: number,
-      @Body() resolution: { decision: string; comment: string; refundAmount?: number },
-      @CurrentUser() admin: User
-    ) {
-      return this.adminService.resolveOrderDispute(id, resolution, admin.id);
-    }
-  
-    // === УПРАВЛЕНИЕ ИСПОЛНИТЕЛЯМИ ===
-  
-    @Get('executors/pending-verification')
-    @ApiOperation({ 
-      summary: 'Получить исполнителей, ожидающих верификации',
-      description: 'Список исполнителей для проверки документов' 
-    })
-    async getPendingExecutors() {
-      return this.adminService.getPendingExecutors();
-    }
-  
-    @Patch('executors/:id/verify')
-    @ApiOperation({ 
-      summary: 'Верифицировать исполнителя',
-      description: 'Подтверждает личность и документы исполнителя' 
-    })
-    @ApiParam({ name: 'id', description: 'ID профиля исполнителя' })
-    async verifyExecutor(
-      @Param('id', ParseIntPipe) id: number,
-      @Body() verification: { approved: boolean; comment?: string }
-    ) {
-      return this.adminService.verifyExecutor(id, verification);
     }
   
     // === СИСТЕМНЫЕ ОПЕРАЦИИ ===
